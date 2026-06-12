@@ -80,6 +80,39 @@ def test_missing_required_columns_raises(tmp_path):
         raise AssertionError("expected KeyError on malformed CSV")
 
 
+def test_orphanet_fills_gaps_without_overriding_curated(tmp_path):
+    """Curated takes precedence; Orphanet adds rows the curated CSV doesn't have."""
+    cur = _csv(tmp_path, "EFO_BC,breast cancer,4100000,1235,SEER,2023\n")
+    orph = tmp_path / "orph.csv"
+    orph.write_text(
+        CURATED_HEADER +
+        "EFO_BC,breast cancer,9999,9.99,WRONG,2099\n"          # collision with curated
+        "Orphanet_42,rare syndrome,166,0.05,Orphanet,2025\n"   # new rare disease
+    )
+    client = MarketSizeClient(curated_csv=cur, orphanet_csv=orph)
+    out = client.lookup(["EFO_BC", "Orphanet_42", "EFO_UNKNOWN"])
+    bc = out[out.efo_id == "EFO_BC"].iloc[0]
+    # Curated wins on collision
+    assert int(bc["us_patients"]) == 4_100_000
+    assert bc["market_source"] == "SEER"
+    rare = out[out.efo_id == "Orphanet_42"].iloc[0]
+    assert int(rare["us_patients"]) == 166
+    assert rare["market_source"] == "Orphanet"
+    assert pd.isna(out[out.efo_id == "EFO_UNKNOWN"].iloc[0]["us_patients"])
+
+
+def test_orphanet_only_works_without_curated(tmp_path):
+    """Pure Orphanet backend (curated missing) still serves lookups."""
+    orph = tmp_path / "orph.csv"
+    orph.write_text(
+        CURATED_HEADER +
+        "Orphanet_42,rare syndrome,166,0.05,Orphanet,2025\n"
+    )
+    client = MarketSizeClient(curated_csv=None, orphanet_csv=orph)
+    out = client.lookup(["Orphanet_42"])
+    assert int(out.iloc[0]["us_patients"]) == 166
+
+
 def test_duplicate_efo_id_first_wins(tmp_path):
     csv = _csv(tmp_path,
                "EFO_BC,breast cancer,4100000,1235,SEER,2023\n"

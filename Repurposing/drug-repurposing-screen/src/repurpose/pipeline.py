@@ -86,7 +86,8 @@ def _maybe_market_pass(ranked: pd.DataFrame, cfg: Config, log) -> pd.DataFrame:
     curated = cfg.path("disease_prevalence") if cfg.get("paths", "disease_prevalence", default=None) else None
     if curated is None:
         curated = cfg.root / cfg.get("market", "curated_csv", default="data/curated/disease_prevalence.csv")
-    client = MarketSizeClient(curated_csv=curated)
+    orphanet = cfg.root / cfg.get("market", "orphanet_csv", default="data/curated/orphanet_prevalence.csv")
+    client = MarketSizeClient(curated_csv=curated, orphanet_csv=orphanet)
     n_query = min(int(cfg.get("market", "top_n", default=10_000)), len(ranked))
     log(f"market pass: looking up US market size for top {n_query} of {len(ranked)} "
         f"hypotheses (csv={curated})")

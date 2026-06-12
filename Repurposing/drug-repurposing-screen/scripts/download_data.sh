@@ -114,6 +114,10 @@ download_ot_parquet_dir "baselineExpression"
 echo ">> EFO ontology (disease parents, for novelty radius)"
 wget -nc "http://www.ebi.ac.uk/efo/efo.obo"
 
+echo ">> Orphanet rare-disease prevalence (XML, CC-BY-4.0)"
+mkdir -p orphanet
+wget -nc -O orphanet/en_product9_prev.xml "https://www.orphadata.com/data/xml/en_product9_prev.xml" || true
+
 echo ">> FDA Orange Book (patent + exclusivity expiries, generic availability)"
 mkdir -p orange_book && cd orange_book
 wget -nc -O ob.zip "https://www.fda.gov/media/76860/download?attachment" || true
@@ -134,6 +138,7 @@ Done. Next:
   2) python scripts/build_string_edges.py           # writes data/full/string_edges.csv (~1.9M PPI edges)
   3) python scripts/build_disease_tissue.py         # writes data/full/disease_tissue.csv from OT therapeutic areas
   4) python scripts/populate_disease_prevalence.py  # writes data/curated/disease_prevalence.csv from curated dict
+  4b) python scripts/build_orphanet_prevalence.py    # writes data/curated/orphanet_prevalence.csv (rare-disease fallback)
   5) (optional, but recommended for the literature pass) sign up for free
      credentials and export them in your shell:
        NCBI API key  -- https://www.ncbi.nlm.nih.gov/account/  (raises PubMed

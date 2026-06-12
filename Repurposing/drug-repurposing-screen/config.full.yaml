@@ -119,9 +119,10 @@ market:
   # us_prevalence_per_100k, and an is_orphan flag (< 200k US patients =
   # FDA Orphan Drug Act threshold). Inspection-only: never changes
   # opportunity or rank -- you sort/filter by these columns downstream.
-  enabled: true                # 122-disease curated CSV ready out of the box
+  enabled: true                # 122-disease curated CSV + 5k rare-disease Orphanet fallback
   top_n: 10000
   curated_csv: data/curated/disease_prevalence.csv
+  orphanet_csv: data/curated/orphanet_prevalence.csv  # built by scripts/build_orphanet_prevalence.py
   rare_disease_us_threshold: 200000
 
 literature:

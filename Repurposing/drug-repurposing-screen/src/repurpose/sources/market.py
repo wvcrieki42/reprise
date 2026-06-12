@@ -33,26 +33,53 @@ CURATED_REQUIRED = {"efo_id", "us_patients", "us_prevalence_per_100k", "source",
 
 @dataclass
 class MarketSizeClient:
-    """Looks up per-disease US market data. V1: curated CSV only."""
+    """Looks up per-disease US market data, layering curated + Orphanet rows.
+
+    The curated CSV holds hand-checked figures for major US diseases
+    (sourced from SEER/CDC/foundation estimates). Orphanet's CSV adds
+    structured rare-disease prevalence estimates for ~5k orphan
+    disorders. On efo_id collision the curated entry wins -- manual
+    figures always override the bulk-derived ones.
+    """
     curated_csv: Path | None = None
-    backends: list[str] = field(default_factory=lambda: ["curated_csv"])
+    orphanet_csv: Path | None = None
+    backends: list[str] = field(default_factory=lambda: ["curated_csv", "orphanet"])
 
     def __post_init__(self) -> None:
-        self._csv: pd.DataFrame = pd.DataFrame(columns=list(CURATED_REQUIRED))
-        if "curated_csv" in self.backends and self.curated_csv:
-            p = Path(self.curated_csv)
-            if p.exists():
-                df = pd.read_csv(p)
-                missing = CURATED_REQUIRED - set(df.columns)
-                if missing:
-                    raise KeyError(
-                        f"market CSV missing required columns {missing}: {p}")
-                df["us_patients"] = pd.to_numeric(df["us_patients"], errors="coerce")
-                df["us_prevalence_per_100k"] = pd.to_numeric(
-                    df["us_prevalence_per_100k"], errors="coerce")
-                df["source"] = df["source"].fillna("").astype(str)
-                df["as_of"] = df["as_of"].fillna("").astype(str)
-                self._csv = df.drop_duplicates(subset=["efo_id"], keep="first")
+        frames = []
+        if "curated_csv" in self.backends:
+            df = self._load_csv(self.curated_csv)
+            if df is not None:
+                frames.append(df)
+        if "orphanet" in self.backends:
+            df = self._load_csv(self.orphanet_csv)
+            if df is not None:
+                frames.append(df)
+        if frames:
+            combined = pd.concat(frames, ignore_index=True)
+            # Earlier frames win on collision (curated > orphanet)
+            self._csv = combined.drop_duplicates(subset=["efo_id"], keep="first") \
+                                .reset_index(drop=True)
+        else:
+            self._csv = pd.DataFrame(columns=list(CURATED_REQUIRED))
+
+    @staticmethod
+    def _load_csv(path: Path | None) -> pd.DataFrame | None:
+        if path is None:
+            return None
+        p = Path(path)
+        if not p.exists():
+            return None
+        df = pd.read_csv(p)
+        missing = CURATED_REQUIRED - set(df.columns)
+        if missing:
+            raise KeyError(f"market CSV missing required columns {missing}: {p}")
+        df["us_patients"] = pd.to_numeric(df["us_patients"], errors="coerce")
+        df["us_prevalence_per_100k"] = pd.to_numeric(
+            df["us_prevalence_per_100k"], errors="coerce")
+        df["source"] = df["source"].fillna("").astype(str)
+        df["as_of"] = df["as_of"].fillna("").astype(str)
+        return df.drop_duplicates(subset=["efo_id"], keep="first")
 
     # ------------------------------------------------------------------
     def lookup(self, efo_ids: Iterable[str]) -> pd.DataFrame:
