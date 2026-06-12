@@ -12,7 +12,9 @@ from . import steps
 
 GENECARDS = "https://www.genecards.org/cgi-bin/carddisp.pl?gene="
 
-OUTPUT_COLS = ["rank", "drug_id", "drug_name", "modality", "efo_id", "disease_name",
+OUTPUT_COLS = ["rank", "drug_id", "drug_name", "substance_chembl_id", "substance_name",
+               "n_variants", "variant_names",
+               "modality", "efo_id", "disease_name",
                "lead_target", "lead_target_name", "lead_target_genecards",
                "mechanistic_support", "novelty", "novelty_status",
                "direction_factor", "direction_status",
@@ -116,6 +118,9 @@ def _prepare(cfg: Config, log):
                       else pd.DataFrame(columns=["target_symbol", "efo_id", "phylo_score",
                                                  "n_models", "sources"]))
     gene_info = loaders.load_gene_info(cfg.path("gene_info"))
+    substance_map = (loaders.load_substance_map(cfg.path("chembl_substance_map"))
+                     if cfg.get("paths", "chembl_substance_map", default=None) is not None
+                     else pd.DataFrame(columns=["drug_id", "substance_chembl_id", "substance_name"]))
 
     universe = steps.build_universe(drugs, cfg)
     log(f"universe (approved US/EU): {len(universe)} drugs")
@@ -145,7 +150,7 @@ def _prepare(cfg: Config, log):
                      .rename("n_drug_targets").reset_index())
     return {"universe": universe, "drug_targets": dt, "target_direction": target_direction,
             "target_expression": target_expression, "disease_tissue": disease_tissue,
-            "phylo_evidence": phylo_evidence,
+            "phylo_evidence": phylo_evidence, "substance_map": substance_map,
             "gene_info": gene_info, "known_exp": known_exp, "breadth": breadth,
             "direction_on": direction_on, "tissue_on": tissue_on, "phylo_on": phylo_on}
 
@@ -180,6 +185,23 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
         hyp["n_drug_targets"] = hyp["n_drug_targets"].fillna(1).astype(int)
         ranked = steps.score(hyp, cfg)
 
+    # Bring drug_name forward so the substance collapse can report variant
+    # names instead of bare ChEMBL ids in `variant_names`. (The duckdb engine
+    # builds ranked without drug_name; the merge in _finalize otherwise comes
+    # too late.)
+    if "drug_name" not in ranked.columns:
+        ranked = ranked.merge(prep["universe"][["drug_id", "drug_name"]],
+                              on="drug_id", how="left")
+
+    # Collapse formulation variants up to their active-ingredient parent BEFORE
+    # the downstream passes so the literature / market lookups operate on
+    # substances (avoids querying the same (lead_target, disease) for 11
+    # insulin variants).
+    pre_collapse = len(ranked)
+    ranked = steps.collapse_to_substances(ranked, prep["substance_map"], cfg)
+    if len(ranked) != pre_collapse:
+        log(f"substance collapse: {pre_collapse} -> {len(ranked)} rows "
+            f"(grouped formulation variants)")
     # Flag (drug, disease) pairs where one of the drug's direct targets is named
     # in the disease itself -- 'drug targets the broken receptor' class. Always
     # on, inspection-only (no automatic score change).
@@ -197,8 +219,16 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
 
 
 def _finalize(ranked: pd.DataFrame, cfg: Config, prep: dict) -> pd.DataFrame:
-    ranked = ranked.merge(prep["universe"][["drug_id", "drug_name", "modality"]],
-                          on="drug_id", how="left")
+    # Don't clobber a drug_name that has already been replaced by substance_name
+    # during the collapse pass; only pull in modality (and drug_name if it's
+    # still missing).
+    cols = ["drug_id"] + [c for c in ["drug_name", "modality"]
+                          if c not in ranked.columns]
+    if len(cols) > 1:
+        ranked = ranked.merge(prep["universe"][cols], on="drug_id", how="left")
+    else:
+        ranked = ranked.merge(prep["universe"][["drug_id", "modality"]],
+                              on="drug_id", how="left")
     # lead-target name + GeneCards link
     gi = prep["gene_info"].rename(columns={"symbol": "lead_target", "gene_name": "lead_target_name"})
     ranked = ranked.merge(gi, on="lead_target", how="left")

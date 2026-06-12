@@ -71,6 +71,35 @@ def chembl_drug_targets(sqlite_path: str) -> pd.DataFrame:
     return df
 
 
+def chembl_substance_map(sqlite_path: str) -> pd.DataFrame:
+    """drug_id -> substance_chembl_id, substance_name.
+
+    Rolls each drug up to its ChEMBL active-ingredient parent via
+    molecule_hierarchy.parent_molregno. Catches the small-molecule salt
+    case cleanly (PIOGLITAZONE HYDROCHLORIDE -> PIOGLITAZONE, KETAMINE
+    HYDROCHLORIDE -> KETAMINE). For biologics where ChEMBL stores each
+    formulation as its own root entry (INSULIN ASPART vs INSULIN ASPART
+    PROTAMINE RECOMBINANT both self-parented), the substance_chembl_id
+    equals the drug_id -- a name-based fallback would be needed to
+    collapse those further; not yet wired.
+    """
+    sql = """
+    SELECT md.chembl_id              AS drug_id,
+           COALESCE(pmd.chembl_id, md.chembl_id) AS substance_chembl_id,
+           COALESCE(pmd.pref_name,  md.pref_name) AS substance_name
+    FROM molecule_dictionary md
+    LEFT JOIN molecule_hierarchy mh ON mh.molregno = md.molregno
+    LEFT JOIN molecule_dictionary pmd ON pmd.molregno = mh.parent_molregno
+    WHERE md.chembl_id IS NOT NULL
+    """
+    con = sqlite3.connect(sqlite_path)
+    try:
+        df = pd.read_sql(sql, con).drop_duplicates(subset=["drug_id"])
+    finally:
+        con.close()
+    return df
+
+
 def chembl_drug_indications(sqlite_path: str) -> pd.DataFrame:
     """Known indications (subtracted from the screen to leave novel hypotheses)."""
     sql = """

@@ -91,6 +91,19 @@ def load_gene_info(path: Path) -> pd.DataFrame:
     return df[["symbol", "gene_name"]]
 
 
+def load_substance_map(path: Path) -> pd.DataFrame:
+    """ChEMBL drug_id -> substance_chembl_id, substance_name.
+
+    Returns an empty frame if the file is missing -- the pipeline will
+    treat every drug as its own substance (no grouping).
+    """
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame(columns=["drug_id", "substance_chembl_id", "substance_name"])
+    df = _read(p)
+    return df[["drug_id", "substance_chembl_id", "substance_name"]]
+
+
 def load_phylo_evidence(path: Path) -> pd.DataFrame:
     """Model-organism (orthologous gene) evidence per (target, disease).
 

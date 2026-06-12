@@ -143,6 +143,13 @@ def main() -> None:
         ["target_symbol", "efo_id", "therapeutic_direction"],
         "target_direction.csv",
     )
+    print("ChEMBL -> chembl_substance_map.csv")
+    export_filtered_csv(
+        adapters.chembl_substance_map(str(chembl_sqlite)),
+        FULL / "chembl_substance_map.csv",
+        ["drug_id", "substance_chembl_id"],
+        "chembl_substance_map.csv",
+    )
     print("Open Targets -> phylo_evidence.csv")
     export_filtered_csv(
         adapters.opentargets_phylo_evidence(ot_evidence, str(gene_map_csv)),

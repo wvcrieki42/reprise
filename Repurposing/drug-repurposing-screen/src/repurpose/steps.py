@@ -494,6 +494,69 @@ def add_literature_pass(ranked: pd.DataFrame, lit_client, cfg: Config) -> pd.Dat
 
 
 # ----------------------------------------------------------------------
+# Step 5e - active-substance grouping (collapse formulation variants)
+# ----------------------------------------------------------------------
+def collapse_to_substances(ranked: pd.DataFrame, substance_map: pd.DataFrame,
+                            cfg: Config) -> pd.DataFrame:
+    """Collapse (drug_id, efo_id) rows into (substance_chembl_id, efo_id).
+
+    Without this, the output is dominated by formulation variants of the
+    same active ingredient -- 11 INSULIN rows for hyperinsulinism, 4 TZD
+    rows for FPLD3, etc. -- all making the same hypothesis with identical
+    scores. We collapse by ChEMBL's active-ingredient parent and keep the
+    highest-opportunity row per substance-disease, while preserving the
+    variant names as a comma-separated `variant_names` column.
+
+    Mode flags via config.substance_grouping:
+      enabled: false -> pass through unchanged (no new columns)
+      enabled, collapse=false -> add substance columns but no row collapse
+      enabled, collapse=true  -> collapse + re-rank (default)
+    """
+    if not bool(cfg.get("substance_grouping", "enabled", default=True)):
+        return ranked
+    out = ranked.copy()
+    if substance_map is None or substance_map.empty:
+        out["substance_chembl_id"] = out["drug_id"]
+        out["substance_name"] = out.get("drug_name", out["drug_id"])
+        out["n_variants"] = 1
+        out["variant_names"] = out.get("drug_name", out["drug_id"])
+        return out
+    out = out.merge(substance_map, on="drug_id", how="left")
+    out["substance_chembl_id"] = out["substance_chembl_id"].fillna(out["drug_id"])
+    if "drug_name" in out.columns:
+        out["substance_name"] = out["substance_name"].fillna(out["drug_name"])
+    else:
+        out["substance_name"] = out["substance_name"].fillna(out["substance_chembl_id"])
+
+    if not bool(cfg.get("substance_grouping", "collapse", default=True)):
+        out["n_variants"] = 1
+        out["variant_names"] = out.get("drug_name", out["substance_name"])
+        return out
+
+    # Collapse: highest-opportunity row per (substance, disease) is the
+    # representative; variant_names lists every formulation that mapped
+    # to this substance for this disease.
+    out = out.sort_values("opportunity", ascending=False, kind="stable")
+    variant_col = "drug_name" if "drug_name" in out.columns else "drug_id"
+    variants = (out.groupby(["substance_chembl_id", "efo_id"])[variant_col]
+                  .apply(lambda s: list(dict.fromkeys(s)))
+                  .rename("variants_list").reset_index())
+    variants["n_variants"] = variants["variants_list"].apply(len)
+    variants["variant_names"] = variants["variants_list"].apply(lambda lst: ", ".join(lst))
+    best = out.drop_duplicates(subset=["substance_chembl_id", "efo_id"], keep="first")
+    best = best.merge(variants[["substance_chembl_id", "efo_id",
+                                "n_variants", "variant_names"]],
+                      on=["substance_chembl_id", "efo_id"], how="left")
+    # Replace the displayed drug_name with the canonical substance_name
+    if "drug_name" in best.columns:
+        best["drug_name"] = best["substance_name"]
+    best = best.sort_values("opportunity", ascending=False).reset_index(drop=True)
+    if "rank" in best.columns:
+        best["rank"] = best.index + 1
+    return best
+
+
+# ----------------------------------------------------------------------
 # Step 5d - flag (drug, disease) pairs where the drug targets a gene named in the disease
 # ----------------------------------------------------------------------
 _GENE_TOKEN_RE = re.compile(r"\b([A-Z][A-Z0-9]{1,6})\b")
