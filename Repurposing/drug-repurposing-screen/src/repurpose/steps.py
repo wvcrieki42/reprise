@@ -590,6 +590,154 @@ def add_pathway_evidence(ranked: pd.DataFrame, drug_targets: pd.DataFrame,
 
 
 # ----------------------------------------------------------------------
+# Step 5i - combination-therapy companion finder
+# ----------------------------------------------------------------------
+def add_combination_partners(ranked: pd.DataFrame,
+                              drug_targets: pd.DataFrame,
+                              target_disease: pd.DataFrame,
+                              substance_map: pd.DataFrame,
+                              cfg: Config) -> pd.DataFrame:
+    """For each top-N primary hypothesis, find companion drug(s) that
+    mechanistically complement the primary on the disease.
+
+    Method (mirrors the screen's own mechanism layer):
+      - The primary's mech contribution to disease D is noisy-OR over its
+        DIRECT targets that have strong (assoc >= partner_min_assoc) OT
+        association with D.
+      - For each strong disease target the primary doesn't hit, look up
+        approved substances that DO hit it -- these are candidate
+        bridging partners.
+      - For each candidate, compute combo_mech = noisy-OR over the union
+        of primary + candidate contributions, then synergy = combo_mech
+        minus the primary's mech alone.
+      - Filter candidates whose target overlap with the primary exceeds
+        max_target_overlap (rejects 'same drug class' redundancy --
+        we want different mechanisms).
+      - Pick the top `partners_per_hit` by synergy.
+
+    Output columns (per partner k in 1..partners_per_hit):
+      combo_partner_k_name           -- companion substance name
+      combo_partner_k_bridge_target  -- the target the partner adds to
+                                        the disease coverage
+      combo_partner_k_synergy        -- mech_combo - mech_primary,
+                                        rounded to 4 decimals
+    """
+    n_partners = int(cfg.get("combination", "partners_per_hit", default=2))
+    out_cols = []
+    for i in range(1, n_partners + 1):
+        out_cols.extend([
+            f"combo_partner_{i}_name",
+            f"combo_partner_{i}_bridge_target",
+            f"combo_partner_{i}_synergy",
+        ])
+    out = ranked.copy()
+    for c in out_cols:
+        if c.endswith("_synergy"):
+            out[c] = pd.array([pd.NA] * len(out), dtype="Float64")
+        else:
+            out[c] = ""
+
+    if not bool(cfg.get("combination", "enabled", default=True)) or out.empty:
+        return out
+
+    top_n = int(cfg.get("combination", "top_n", default=100))
+    min_synergy = float(cfg.get("combination", "min_synergy", default=0.1))
+    max_overlap = float(cfg.get("combination", "max_target_overlap", default=0.5))
+    partner_min_assoc = float(cfg.get("combination", "partner_min_assoc", default=0.3))
+
+    # Substance-rolled-up DIRECT targets (a primary may have multiple
+    # formulations sharing the same active ingredient).
+    dt = drug_targets
+    if "is_direct" in dt.columns:
+        dt = dt[dt["is_direct"]]
+    if substance_map is None or substance_map.empty:
+        dt = dt.assign(substance_chembl_id=dt["drug_id"],
+                       substance_name=dt["drug_id"])
+    else:
+        dt = dt.merge(substance_map[["drug_id", "substance_chembl_id",
+                                      "substance_name"]],
+                     on="drug_id", how="left")
+        dt["substance_chembl_id"] = dt["substance_chembl_id"].fillna(dt["drug_id"])
+        dt["substance_name"] = dt["substance_name"].fillna(dt["drug_id"])
+
+    # substance_id -> {targets set, name}
+    sub_index = (dt.groupby("substance_chembl_id")
+                   .agg(targets=("target_symbol", lambda s: set(s)),
+                        name=("substance_name", "first"))
+                   .to_dict("index"))
+    # target -> set of substance_ids that hit it
+    target_to_subs = dt.groupby("target_symbol")["substance_chembl_id"] \
+                       .apply(set).to_dict()
+    # disease -> {target: assoc} for strong associations
+    td_strong = target_disease[target_disease["assoc_score"] >= partner_min_assoc]
+    disease_strong = (td_strong.groupby("efo_id")
+                                .apply(lambda g: dict(zip(g["target_symbol"],
+                                                          g["assoc_score"])),
+                                       include_groups=False)
+                                .to_dict())
+
+    head = out.head(top_n)
+    for idx, row in head.iterrows():
+        primary_sub = row.get("substance_chembl_id") or row.get("drug_id")
+        efo = row.get("efo_id")
+        if not primary_sub or not efo:
+            continue
+        primary = sub_index.get(primary_sub)
+        if not primary:
+            continue
+        d_targets = disease_strong.get(efo)
+        if not d_targets:
+            continue
+
+        # Primary's contributions on D
+        primary_contribs = [d_targets[t] for t in primary["targets"]
+                            if t in d_targets]
+        if not primary_contribs:
+            continue
+        mech_primary = 1.0 - float(np.prod([1.0 - min(c, 0.999)
+                                            for c in primary_contribs]))
+
+        uncovered = {t: a for t, a in d_targets.items()
+                     if t not in primary["targets"]}
+        if not uncovered:
+            continue
+
+        candidates: dict[str, dict] = {}
+        for bridge_t in uncovered:
+            for cand_sub in target_to_subs.get(bridge_t, ()):
+                if cand_sub == primary_sub or cand_sub in candidates:
+                    continue
+                cand = sub_index.get(cand_sub)
+                if not cand:
+                    continue
+                overlap = (len(primary["targets"] & cand["targets"])
+                           / max(len(primary["targets"]), 1))
+                if overlap > max_overlap:
+                    continue
+                cand_contribs = [d_targets[t] for t in cand["targets"]
+                                  if t in d_targets]
+                combo = primary_contribs + cand_contribs
+                mech_combo = 1.0 - float(
+                    np.prod([1.0 - min(c, 0.999) for c in combo]))
+                synergy = mech_combo - mech_primary
+                if synergy < min_synergy:
+                    continue
+                candidates[cand_sub] = {
+                    "synergy": round(synergy, 4),
+                    "bridge_target": bridge_t,
+                    "name": cand["name"],
+                }
+
+        ranked_cands = sorted(candidates.values(),
+                              key=lambda x: x["synergy"], reverse=True)[:n_partners]
+        for k, c in enumerate(ranked_cands, 1):
+            out.at[idx, f"combo_partner_{k}_name"] = c["name"]
+            out.at[idx, f"combo_partner_{k}_bridge_target"] = c["bridge_target"]
+            out.at[idx, f"combo_partner_{k}_synergy"] = c["synergy"]
+    return out
+
+
+# ----------------------------------------------------------------------
 # Step 5h - severity flag: receptor-LoF + agonist drug = futile
 # ----------------------------------------------------------------------
 _SEVERITY_KEYWORDS = (
