@@ -19,6 +19,8 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "modality", "efo_id", "disease_na
                "tissue_factor", "tissue_status", "tissue_evidence",
                "pubmed_count", "europepmc_count", "trial_count", "patent_count",
                "investigation_prior",
+               "us_patients", "us_prevalence_per_100k", "is_orphan",
+               "market_source", "as_of",
                "n_targets", "n_drug_targets", "opportunity",
                "evidence_targets", "data_version"]
 
@@ -58,6 +60,25 @@ def _maybe_literature_pass(ranked: pd.DataFrame, cfg: Config, prep: dict, log) -
             columns={"symbol": "lead_target", "gene_name": "target_synonyms"})
         ranked = ranked.merge(syn, on="lead_target", how="left")
     return steps.add_literature_pass(ranked, lit, cfg)
+
+
+def _maybe_market_pass(ranked: pd.DataFrame, cfg: Config, log) -> pd.DataFrame:
+    """Attach US market data (patient count, prevalence, orphan flag) from a curated CSV.
+
+    Inspection-only: this pass never modifies opportunity or rank -- it
+    just adds columns the caller can sort/filter by downstream.
+    """
+    if not cfg.get("market", "enabled", default=False):
+        return ranked
+    from .sources.market import MarketSizeClient
+    curated = cfg.path("disease_prevalence") if cfg.get("paths", "disease_prevalence", default=None) else None
+    if curated is None:
+        curated = cfg.root / cfg.get("market", "curated_csv", default="data/curated/disease_prevalence.csv")
+    client = MarketSizeClient(curated_csv=curated)
+    n_query = min(int(cfg.get("market", "top_n", default=10_000)), len(ranked))
+    log(f"market pass: looking up US market size for top {n_query} of {len(ranked)} "
+        f"hypotheses (csv={curated})")
+    return steps.add_market_size(ranked, client, cfg)
 
 
 def _logger(verbose: bool):
@@ -134,6 +155,7 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
         ranked = steps.score(hyp, cfg)
 
     ranked = _maybe_literature_pass(ranked, cfg, prep, log)
+    ranked = _maybe_market_pass(ranked, cfg, log)
     ranked = _finalize(ranked, cfg, prep)
     log(f"final ranked hypotheses: {len(ranked)}")
     return ranked
@@ -180,6 +202,9 @@ def run_from_file(config_path: str | Path, verbose: bool = True) -> pd.DataFrame
             "literature_enabled": cfg.get("literature", "enabled", default=False),
             "literature_top_n": cfg.get("literature", "top_n", default=5000),
             "w_investigation": cfg.get("scoring", "w_investigation", default=0.0),
+            "market_enabled": cfg.get("market", "enabled", default=False),
+            "rare_disease_us_threshold": cfg.get(
+                "market", "rare_disease_us_threshold", default=200_000),
             "min_opportunity": cfg.get("scoring", "min_opportunity", default=0.0),
         },
     }

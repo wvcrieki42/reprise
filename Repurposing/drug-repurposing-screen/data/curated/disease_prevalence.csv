@@ -1,0 +1,29 @@
+efo_id,disease_name,us_patients,us_prevalence_per_100k,source,as_of
+EFO_0000305,breast cancer,4100000,1235,SEER/ACS cancer survivors estimate,2023
+EFO_0001360,type 2 diabetes mellitus,37300000,11230,CDC National Diabetes Statistics Report,2022
+EFO_0000249,Alzheimer disease,6700000,2020,Alzheimer's Association Facts and Figures,2024
+EFO_0000685,rheumatoid arthritis,1300000,390,CDC / ACR estimates,2022
+EFO_0000384,Crohn disease,780000,235,CCFA / NIDDK estimates,2020
+EFO_0000729,ulcerative colitis,907000,273,CCFA / NIDDK estimates,2020
+EFO_0000768,idiopathic pulmonary fibrosis,100000,30,NIH RareDiseases / PFF estimate,2020
+EFO_0000253,amyotrophic lateral sclerosis,32000,10,ALS Association estimates,2023
+EFO_0002508,Parkinson disease,1000000,300,Parkinson's Foundation estimates,2023
+EFO_0003885,multiple sclerosis,1000000,300,National MS Society estimates,2022
+EFO_0001359,diabetes mellitus,38400000,11600,CDC National Diabetes Statistics Report,2022
+EFO_0000270,asthma,25000000,7500,CDC NHIS,2022
+EFO_0000341,inflammatory bowel disease,1600000,480,CCFA / CDC estimates,2020
+EFO_0003898,Huntington disease,30000,9,Huntington's Disease Society of America,2022
+EFO_0006791,non-alcoholic steatohepatitis,5000000,1505,NASH / NAFLD adult prevalence estimates,2022
+EFO_0001073,obesity,108000000,32500,CDC NHANES adult obesity prevalence,2022
+EFO_0004611,hypercholesterolemia,28000000,8430,CDC heart disease and cholesterol surveillance,2022
+EFO_1001050,pulmonary arterial hypertension,40000,12,Pulmonary Hypertension Association rare-disease estimate,2022
+EFO_0000756,erectile dysfunction,18000000,5420,NIH / NIDDK adult male prevalence estimate,2022
+EFO_0004274,gout,9200000,2770,CDC NHANES / Arthritis Foundation,2022
+EFO_IPF,Idiopathic pulmonary fibrosis (demo),100000,30,demo,2024
+EFO_ALS,Amyotrophic lateral sclerosis (demo),32000,10,demo,2024
+EFO_UC,Ulcerative colitis (demo),907000,273,demo,2024
+EFO_RA,Rheumatoid arthritis (demo),1300000,390,demo,2024
+EFO_AD,Alzheimer disease (demo),6700000,2020,demo,2024
+EFO_BC,Breast cancer (demo),4100000,1235,demo,2024
+EFO_PAH,Pulmonary arterial hypertension (demo),40000,12,demo,2024
+EFO_T2D,Type 2 diabetes mellitus (demo),37300000,11230,demo,2024

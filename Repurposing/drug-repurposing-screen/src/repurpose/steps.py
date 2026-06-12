@@ -372,3 +372,39 @@ def add_literature_pass(ranked: pd.DataFrame, lit_client, cfg: Config) -> pd.Dat
         if "rank" in out.columns:
             out["rank"] = out.index + 1
     return out
+
+
+# ----------------------------------------------------------------------
+# Step 5c - US market-size enrichment (inspection-only)
+# ----------------------------------------------------------------------
+def add_market_size(ranked: pd.DataFrame, market_client, cfg: Config) -> pd.DataFrame:
+    """Attach US market data to the top-N hypotheses without changing ranking.
+
+    Single-pass over unique EFO IDs in the top-N (small fan-out: ~thousands
+    of distinct diseases even at full scale). The orphan-drug flag is
+    derived from `us_patients` against the US Orphan Drug Act threshold
+    (default 200,000); rows whose patient count is unknown get NA, NOT
+    False -- we don't want to silently say "not orphan" when we don't know.
+    """
+    top_n = int(cfg.get("market", "top_n", default=10_000))
+    orphan_threshold = int(cfg.get("market", "rare_disease_us_threshold", default=200_000))
+    out = ranked.copy()
+    if out.empty or top_n <= 0:
+        out["us_patients"] = pd.array([pd.NA] * len(out), dtype="Int64")
+        out["us_prevalence_per_100k"] = float("nan")
+        out["market_source"] = ""
+        out["as_of"] = ""
+        out["is_orphan"] = pd.array([pd.NA] * len(out), dtype="boolean")
+        return out
+
+    head = out.head(top_n)
+    uniq_ids = head["efo_id"].dropna().drop_duplicates().tolist()
+    market = market_client.lookup(uniq_ids)
+    out = out.merge(market, on="efo_id", how="left")
+    out["us_patients"] = out["us_patients"].astype("Int64")
+    out["market_source"] = out["market_source"].fillna("")
+    out["as_of"] = out["as_of"].fillna("")
+    out["is_orphan"] = pd.array(
+        [(x < orphan_threshold) if pd.notna(x) else pd.NA for x in out["us_patients"]],
+        dtype="boolean")
+    return out

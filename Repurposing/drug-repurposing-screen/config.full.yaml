@@ -61,6 +61,17 @@ scoring:
   min_opportunity: 0.05        # tighter cut for the very large full-scale output
   top_n: 200000
 
+market:
+  # US market-size enrichment for predicted diseases. Joins a curated CSV
+  # (efo_id keyed) onto the top-N hypotheses and attaches us_patients,
+  # us_prevalence_per_100k, and an is_orphan flag (< 200k US patients =
+  # FDA Orphan Drug Act threshold). Inspection-only: never changes
+  # opportunity or rank -- you sort/filter by these columns downstream.
+  enabled: false
+  top_n: 10000
+  curated_csv: data/curated/disease_prevalence.csv
+  rare_disease_us_threshold: 200000
+
 literature:
   # Two-pass enrichment: query PubMed / Europe PMC / ClinicalTrials.gov for the
   # top-N hypotheses after the initial score, attach counts and a normalised
