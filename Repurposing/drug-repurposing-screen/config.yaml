@@ -66,6 +66,15 @@ tissue:
   absent_factor: 0.3            # target measured but not expressed in the disease tissue
   unknown_factor: 0.7           # no expression / tissue mapping -> mild discount, not a veto
 
+phylogenetics:
+  # Boost-only: present orthologous-gene model-organism evidence (IMPC mouse KOs by
+  # default, via OT) boosts opportunity by up to (1 + boost_factor); absence applies
+  # no penalty -- not every gene has been knocked out in mouse yet.
+  enabled: false                # demo data ships no phylo_evidence.csv; off in smoke
+  boost_factor: 0.5
+  min_score: 0.0
+  sources: [impc]
+
 scoring:
   w_mech: 1.0
   w_novelty: 1.0

@@ -87,6 +87,23 @@ def load_gene_info(path: Path) -> pd.DataFrame:
     return df[["symbol", "gene_name"]]
 
 
+def load_phylo_evidence(path: Path) -> pd.DataFrame:
+    """Model-organism (orthologous gene) evidence per (target, disease).
+
+    Columns: target_symbol, efo_id, phylo_score in [0, 1], n_models,
+    sources (comma-separated source datasources, e.g. "impc").
+    Returns an empty frame if the file is missing -- the pipeline will
+    treat all pairs as 'no phylo evidence' (factor 1.0, no penalty).
+    """
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame(columns=["target_symbol", "efo_id", "phylo_score",
+                                     "n_models", "sources"])
+    df = _read(p)
+    df["phylo_score"] = pd.to_numeric(df["phylo_score"], errors="coerce").fillna(0.0)
+    return df[["target_symbol", "efo_id", "phylo_score", "n_models", "sources"]]
+
+
 def load_target_direction(path: Path) -> pd.DataFrame:
     """Direction-of-effect: therapeutic_direction in {-1, +1}.
 

@@ -243,6 +243,49 @@ def add_tissue(edges: pd.DataFrame, target_expression: pd.DataFrame,
 
 
 # ----------------------------------------------------------------------
+# Step 3e - phylogenetics (orthologous-gene model-organism evidence)
+# ----------------------------------------------------------------------
+def add_phylo_evidence(edges: pd.DataFrame, phylo: pd.DataFrame,
+                       cfg: Config) -> pd.DataFrame:
+    """Per (drug, disease): phylo_factor, phylo_score, phylo_n_models, phylo_sources.
+
+    Asymmetric -- present evidence BOOSTS the opportunity score, absence
+    does NOT penalise (factor 1.0 in both 'no measurement' and 'measured
+    no signal'). Rationale: many target-disease relationships in the
+    literature ARE evidenced through orthologous knockouts in mouse/fly/
+    fish, but the absence of such a study is not evidence against the
+    target -- the model organism may not have been studied yet.
+
+    Aggregation across the drug's targets is MAX -- a single target with
+    a strong cross-species phenotype is sufficient to credit the drug.
+
+        factor = 1 + boost_factor * phylo_score   (clip to [1, 1 + boost_factor])
+        boost_factor = 0   -> no effect (inspection-only via the column)
+        boost_factor = 0.5 -> up to 1.5x on opportunity (default)
+    """
+    boost = float(cfg.get("phylogenetics", "boost_factor", default=0.5))
+    out_cols = ["drug_id", "efo_id", "phylo_factor", "phylo_score",
+                "phylo_n_models", "phylo_sources"]
+    if edges.empty or phylo.empty:
+        return pd.DataFrame(columns=out_cols)
+
+    e = edges[["drug_id", "efo_id", "target_symbol"]].merge(
+        phylo[["target_symbol", "efo_id", "phylo_score", "n_models", "sources"]],
+        on=["target_symbol", "efo_id"], how="inner")
+    if e.empty:
+        return pd.DataFrame(columns=out_cols)
+
+    # Per (drug, disease): take the target with the strongest phylo_score
+    # (one target with strong model-organism evidence is enough to boost).
+    idx = e.groupby(["drug_id", "efo_id"])["phylo_score"].idxmax()
+    best = e.loc[idx, ["drug_id", "efo_id", "phylo_score", "n_models", "sources"]].copy()
+    best = best.rename(columns={"n_models": "phylo_n_models",
+                                "sources": "phylo_sources"})
+    best["phylo_factor"] = (1.0 + boost * best["phylo_score"].clip(0, 1)).round(4)
+    return best[out_cols].reset_index(drop=True)
+
+
+# ----------------------------------------------------------------------
 # Step 4 - novelty
 # ----------------------------------------------------------------------
 def known_expanded(indications: pd.DataFrame, ontology: pd.DataFrame,
@@ -301,11 +344,16 @@ def score(hypotheses: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         h["tissue_factor"] = 1.0
     h["tissue_factor"] = h["tissue_factor"].fillna(
         float(cfg.get("tissue", "unknown_factor", default=0.7)))
+    # phylo_factor is BOOST-ONLY: missing or absent -> 1.0 (no penalty).
+    if "phylo_factor" not in h.columns:
+        h["phylo_factor"] = 1.0
+    h["phylo_factor"] = h["phylo_factor"].fillna(1.0)
 
     opp = ((h["mechanistic_support"].clip(0, 1) ** w_m)
            * (h["novelty"].clip(0, 1) ** w_n)
            * h["direction_factor"]
-           * h["tissue_factor"])
+           * h["tissue_factor"]
+           * h["phylo_factor"])
     if penalty:
         basis = h["n_drug_targets"] if "n_drug_targets" in h.columns else h["n_targets"]
         opp = opp / np.sqrt(basis.clip(lower=1))

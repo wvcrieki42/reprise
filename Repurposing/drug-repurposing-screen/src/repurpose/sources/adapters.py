@@ -162,6 +162,44 @@ def opentargets_target_direction(evidence_parquet_dir: str, gene_map_csv: str) -
     return out[["target_symbol", "efo_id", "therapeutic_direction", "evidence"]]
 
 
+def opentargets_phylo_evidence(evidence_parquet_dir: str, gene_map_csv: str,
+                               sources: tuple[str, ...] = ("impc",),
+                               min_score: float = 0.0) -> pd.DataFrame:
+    """Per (target_symbol, efo_id): model-organism (orthologous gene) evidence.
+
+    Reads OT evidence rows where `datatypeId == "animal_model"` from the
+    requested sources (default: IMPC mouse knockouts; PhenoDigm provides
+    the cross-species phenotype matching that produces the score). Each
+    row is a piece of evidence -- a specific mouse model exhibiting a
+    phenotype that maps to the human disease.
+
+    Aggregation:
+      * per (target_symbol, efo_id): take MAX score across rows
+        (strongest evidence wins; many weak hits != one strong cross-
+        species match)
+      * also report n_models (number of evidence rows kept) and the set
+        of contributing sources, for downstream provenance.
+
+    Returns columns: target_symbol, efo_id, phylo_score, n_models, sources.
+    """
+    ev = pd.read_parquet(evidence_parquet_dir, columns=[
+        "datasourceId", "datatypeId", "targetId", "diseaseId", "score"])
+    ev = ev[(ev["datatypeId"] == "animal_model") & (ev["datasourceId"].isin(sources))]
+    ev = ev[ev["score"] >= min_score]
+    if ev.empty:
+        return pd.DataFrame(columns=["target_symbol", "efo_id", "phylo_score",
+                                     "n_models", "sources"])
+    ev = ev.rename(columns={"targetId": "ensembl_id", "diseaseId": "efo_id"})
+    agg = (ev.groupby(["ensembl_id", "efo_id"])
+             .agg(phylo_score=("score", "max"),
+                  n_models=("score", "size"),
+                  sources=("datasourceId", lambda s: ",".join(sorted(set(s)))))
+             .reset_index())
+    genes = pd.read_csv(gene_map_csv)  # ensembl_id, target_symbol
+    out = agg.merge(genes, on="ensembl_id", how="inner")
+    return out[["target_symbol", "efo_id", "phylo_score", "n_models", "sources"]]
+
+
 def opentargets_gene_info(targets_parquet_dir: str) -> pd.DataFrame:
     """symbol -> full target name, from the Open Targets `targets` dataset."""
     t = pd.read_parquet(targets_parquet_dir)

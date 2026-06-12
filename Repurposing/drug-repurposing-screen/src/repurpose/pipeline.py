@@ -17,6 +17,7 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "modality", "efo_id", "disease_na
                "mechanistic_support", "novelty", "novelty_status",
                "direction_factor", "direction_status",
                "tissue_factor", "tissue_status", "tissue_evidence",
+               "phylo_factor", "phylo_score", "phylo_n_models", "phylo_sources",
                "pubmed_count", "europepmc_count", "trial_count", "patent_count",
                "investigation_prior",
                "us_patients", "us_prevalence_per_100k", "is_orphan",
@@ -109,6 +110,10 @@ def _prepare(cfg: Config, log):
         else pd.DataFrame(columns=["target_symbol", "tissue", "expression"])
     disease_tissue = loaders.load_disease_tissue(cfg.path("disease_tissue")) if tissue_on \
         else pd.DataFrame(columns=["efo_id", "tissue", "relevance"])
+    phylo_on = bool(cfg.get("phylogenetics", "enabled", default=False))
+    phylo_evidence = (loaders.load_phylo_evidence(cfg.path("phylo_evidence")) if phylo_on
+                      else pd.DataFrame(columns=["target_symbol", "efo_id", "phylo_score",
+                                                 "n_models", "sources"]))
     gene_info = loaders.load_gene_info(cfg.path("gene_info"))
 
     universe = steps.build_universe(drugs, cfg)
@@ -123,8 +128,9 @@ def _prepare(cfg: Config, log):
                      .rename("n_drug_targets").reset_index())
     return {"universe": universe, "drug_targets": dt, "target_direction": target_direction,
             "target_expression": target_expression, "disease_tissue": disease_tissue,
+            "phylo_evidence": phylo_evidence,
             "gene_info": gene_info, "known_exp": known_exp, "breadth": breadth,
-            "direction_on": direction_on, "tissue_on": tissue_on}
+            "direction_on": direction_on, "tissue_on": tissue_on, "phylo_on": phylo_on}
 
 
 def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
@@ -149,6 +155,9 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
         if prep["tissue_on"]:
             hyp = hyp.merge(steps.add_tissue(edges, prep["target_expression"],
                                              prep["disease_tissue"], cfg),
+                            on=["drug_id", "efo_id"], how="left")
+        if prep["phylo_on"]:
+            hyp = hyp.merge(steps.add_phylo_evidence(edges, prep["phylo_evidence"], cfg),
                             on=["drug_id", "efo_id"], how="left")
         hyp = hyp.merge(prep["breadth"], on="drug_id", how="left")
         hyp["n_drug_targets"] = hyp["n_drug_targets"].fillna(1).astype(int)

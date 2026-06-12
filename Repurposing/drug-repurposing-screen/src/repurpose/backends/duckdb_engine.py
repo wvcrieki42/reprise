@@ -52,11 +52,16 @@ def run_duckdb(cfg: Config, prep: dict, log=lambda m: None) -> pd.DataFrame:
     absent = float(cfg.get("tissue", "absent_factor", default=0.3))
     t_unknown = float(cfg.get("tissue", "unknown_factor", default=0.7))
 
+    phylo_on = bool(prep.get("phylo_on", False))
+    phylo_boost = float(cfg.get("phylogenetics", "boost_factor", default=0.5))
+
     con = duckdb.connect()
     con.register("dt", prep["drug_targets"])
     con.register("tdir", prep["target_direction"])
     con.register("texpr", prep["target_expression"])
     con.register("dtissue", prep["disease_tissue"])
+    con.register("phylo_ev", prep.get("phylo_evidence", pd.DataFrame(
+        columns=["target_symbol", "efo_id", "phylo_score", "n_models", "sources"])))
     con.register("known_exp", prep["known_exp"])
     con.register("breadth", prep["breadth"])
 
@@ -129,6 +134,29 @@ def run_duckdb(cfg: Config, prep: dict, log=lambda m: None) -> pd.DataFrame:
     else:
         tissue_cte, tis_factor, tis_status, tis_evidence, tis_join = "", "1.0", "NULL", "''", ""
 
+    # ---- phylogenetics (orthologous-gene model-organism evidence) ----
+    if phylo_on:
+        phylo_cte = """
+        , phylo AS (
+          SELECT e.drug_id, e.efo_id,
+                 MAX(p.phylo_score) AS phylo_score,
+                 arg_max(p.n_models, p.phylo_score) AS phylo_n_models,
+                 arg_max(p.sources, p.phylo_score) AS phylo_sources
+          FROM edges e JOIN phylo_ev p
+            ON e.target_symbol = p.target_symbol AND e.efo_id = p.efo_id
+          GROUP BY 1, 2
+        )"""
+        # Boost-only: COALESCE to 1.0 when there's no phylo row (no penalty).
+        phy_factor = (f"ROUND(COALESCE(1.0 + {phylo_boost} * "
+                      f"LEAST(GREATEST(ph.phylo_score, 0), 1), 1.0), 4)")
+        phy_score = "COALESCE(ph.phylo_score, 0.0)"
+        phy_models = "COALESCE(ph.phylo_n_models, 0)"
+        phy_sources = "COALESCE(ph.phylo_sources, '')"
+        phy_join = "LEFT JOIN phylo ph ON s.drug_id = ph.drug_id AND s.efo_id = ph.efo_id"
+    else:
+        phylo_cte, phy_factor = "", "1.0"
+        phy_score, phy_models, phy_sources, phy_join = "NULL", "NULL", "NULL", ""
+
     query = f"""
     WITH td AS (
         SELECT CAST(target_symbol AS VARCHAR) target_symbol,
@@ -155,6 +183,7 @@ def run_duckdb(cfg: Config, prep: dict, log=lambda m: None) -> pd.DataFrame:
     )
     {dir_cte}
     {tissue_cte}
+    {phylo_cte}
     , scored AS (
         SELECT s.drug_id, s.efo_id, s.disease_name, s.lead_target,
                s.mechanistic_support,
@@ -165,17 +194,22 @@ def run_duckdb(cfg: Config, prep: dict, log=lambda m: None) -> pd.DataFrame:
                {tis_factor} AS tissue_factor,
                {tis_status} AS tissue_status,
                {tis_evidence} AS tissue_evidence,
+               {phy_factor} AS phylo_factor,
+               {phy_score} AS phylo_score,
+               {phy_models} AS phylo_n_models,
+               {phy_sources} AS phylo_sources,
                s.n_targets,
                COALESCE(b.n_drug_targets, 1) AS n_drug_targets,
                ROUND( POWER(LEAST(GREATEST(s.mechanistic_support,0),1), {w_m})
                     * POWER(LEAST(GREATEST(COALESCE(k.novelty,1.0),0),1), {w_n})
-                    * ({dir_factor}) * ({tis_factor}) / {pen_expr}, 5) AS opportunity,
+                    * ({dir_factor}) * ({tis_factor}) * ({phy_factor}) / {pen_expr}, 5) AS opportunity,
                s.evidence_targets
         FROM support s
         LEFT JOIN known_exp k ON s.drug_id = k.drug_id AND s.efo_id = k.efo_id
         LEFT JOIN breadth   b ON s.drug_id = b.drug_id
         {dir_join}
         {tis_join}
+        {phy_join}
     )
     SELECT * FROM scored
     WHERE opportunity >= {min_opp}

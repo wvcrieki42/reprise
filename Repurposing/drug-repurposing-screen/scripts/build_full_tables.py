@@ -143,6 +143,13 @@ def main() -> None:
         ["target_symbol", "efo_id", "therapeutic_direction"],
         "target_direction.csv",
     )
+    print("Open Targets -> phylo_evidence.csv")
+    export_filtered_csv(
+        adapters.opentargets_phylo_evidence(ot_evidence, str(gene_map_csv)),
+        FULL / "phylo_evidence.csv",
+        ["target_symbol", "efo_id", "phylo_score"],
+        "phylo_evidence.csv",
+    )
     print("Open Targets -> gene_info.csv")
     export_filtered_csv(
         adapters.opentargets_gene_info(ot_targets),
