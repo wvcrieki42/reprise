@@ -20,8 +20,10 @@ FULL.mkdir(parents=True, exist_ok=True)
 OT_ASSOC_DIR  = FULL / "associationByOverallDirect"
 OT_EVIDENCE   = FULL / "evidence"               # for direction-of-effect
 OT_TARGETS    = FULL / "targets"                # for gene names + ensembl->symbol map
+OT_DISEASES   = FULL / "diseases"               # for diseaseId -> disease name
 OT_BASELINE   = FULL / "baselineExpression"     # for tissue expression
 OT_GENE_MAP   = FULL / "ot_gene_map.csv"        # ensembl_id,target_symbol
+OT_DISEASE_MAP = FULL / "ot_disease_map.csv"    # efo_id,disease_name
 EFO_OBO       = FULL / "efo.obo"
 
 def resolve_chembl_sqlite() -> Path:
@@ -47,6 +49,25 @@ def ensure_ot_gene_map(targets_dir: Path, out_csv: Path) -> Path:
                       .dropna()
                       .drop_duplicates())
     gene_map.to_csv(out_csv, index=False)
+    return out_csv
+
+
+def ensure_ot_disease_map(diseases_dir: Path, out_csv: Path) -> Path:
+    """Create efo_id -> disease_name map from OT diseases parquet if missing."""
+    if out_csv.exists():
+        return out_csv
+    diseases = pd.read_parquet(parquet_paths(diseases_dir))
+    id_col = next((c for c in ["id", "diseaseId", "disease_id"] if c in diseases.columns), None)
+    name_col = next((c for c in ["name", "diseaseName", "label"] if c in diseases.columns), None)
+    if id_col is None or name_col is None:
+        raise KeyError(
+            f"Could not find disease id/name columns in OT diseases dataset. Columns: {list(diseases.columns)}"
+        )
+    disease_map = (diseases.rename(columns={id_col: "efo_id", name_col: "disease_name"})
+                           [["efo_id", "disease_name"]]
+                           .dropna(subset=["efo_id"])
+                           .drop_duplicates(subset=["efo_id"]))
+    disease_map.to_csv(out_csv, index=False)
     return out_csv
 
 
@@ -78,12 +99,15 @@ def export_filtered_csv(df: pd.DataFrame, out_path: Path, key_cols: list[str], l
 def main() -> None:
     chembl_sqlite = resolve_chembl_sqlite()
     gene_map_csv = ensure_ot_gene_map(OT_TARGETS, OT_GENE_MAP)
+    disease_map_csv = ensure_ot_disease_map(OT_DISEASES, OT_DISEASE_MAP)
     ot_assoc = parquet_paths(OT_ASSOC_DIR)
     ot_targets = parquet_paths(OT_TARGETS)
+    ot_diseases = parquet_paths(OT_DISEASES)
     ot_evidence = parquet_paths(OT_EVIDENCE)
     ot_baseline = parquet_paths(OT_BASELINE)
     print(f"Using ChEMBL DB: {chembl_sqlite}")
     print(f"Using OT gene map: {gene_map_csv}")
+    print(f"Using OT disease map: {disease_map_csv} ({len(ot_diseases)} parquet parts)")
     print("ChEMBL -> drugs.csv")
     export_filtered_csv(
         adapters.chembl_drugs(str(chembl_sqlite)),
@@ -107,7 +131,7 @@ def main() -> None:
     )
     print("Open Targets -> target_disease.csv")
     export_filtered_csv(
-        adapters.opentargets_target_disease(ot_assoc, str(gene_map_csv)),
+        adapters.opentargets_target_disease(ot_assoc, str(gene_map_csv), str(disease_map_csv)),
         FULL / "target_disease.csv",
         ["target_symbol", "efo_id", "assoc_score"],
         "target_disease.csv",

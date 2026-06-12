@@ -28,7 +28,7 @@ if [[ ! -d "${CHEMBL_DIR}" ]]; then
   tar -xzf "${CHEMBL_ARCHIVE}"
 fi
 
-echo ">> Open Targets parquet datasets (associations, targets, evidence, baselineExpression)"
+echo ">> Open Targets parquet datasets (associations, targets, diseases, evidence, baselineExpression)"
 # Browse https://platform.opentargets.org/downloads for the current FTP path/version.
 OT_VER="${OT_VER:-24.06}"
 OT_BASE_URL="https://ftp.ebi.ac.uk/pub/databases/opentargets/platform/${OT_VER}/output/etl/parquet"
@@ -107,6 +107,7 @@ download_ot_parquet_dir() {
 
 download_ot_parquet_dir "associationByOverallDirect"
 download_ot_parquet_dir "targets"
+download_ot_parquet_dir "diseases"
 download_ot_parquet_dir "evidence"
 download_ot_parquet_dir "baselineExpression"
 

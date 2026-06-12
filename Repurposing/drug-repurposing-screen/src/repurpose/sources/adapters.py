@@ -94,6 +94,7 @@ def chembl_drug_indications(sqlite_path: str) -> pd.DataFrame:
 # Open Targets associations (parquet)  ->  target_disease
 # ----------------------------------------------------------------------
 def opentargets_target_disease(parquet_dir: str, gene_map_csv: str,
+                               disease_map_csv: str | None = None,
                                min_score: float = 0.1) -> pd.DataFrame:
     """target -> disease association scores.
 
@@ -106,7 +107,16 @@ def opentargets_target_disease(parquet_dir: str, gene_map_csv: str,
     assoc = assoc[assoc["assoc_score"] >= min_score]
     genes = pd.read_csv(gene_map_csv)  # ensembl_id, target_symbol
     out = assoc.merge(genes, on="ensembl_id", how="inner")
-    out["disease_name"] = ""          # join OT diseases.parquet if names wanted
+    if disease_map_csv:
+        dm = pd.read_csv(disease_map_csv)
+        if {"efo_id", "disease_name"}.issubset(dm.columns):
+            dm = dm[["efo_id", "disease_name"]].dropna(subset=["efo_id"]).drop_duplicates(subset=["efo_id"])
+            out = out.merge(dm, on="efo_id", how="left")
+        else:
+            out["disease_name"] = ""
+    else:
+        out["disease_name"] = ""
+    out["disease_name"] = out["disease_name"].fillna("")
     return out[["target_symbol", "efo_id", "disease_name", "assoc_score"]]
 
 
