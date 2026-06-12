@@ -1,0 +1,168 @@
+# Known successful drug-repurposing cases for backtesting the screen.
+#
+# Each case names a drug and one indication it was REPURPOSED for (distinct
+# from its original use). The script computes mech_support for the
+# (drug, repurposed_indication) pair from drug_targets x target_disease,
+# without subtracting novelty -- the question is "would the mechanism layer
+# surface this connection?" not "is it still flagged as novel today?".
+#
+# Field guide:
+#   drug                    -- ChEMBL pref_name (case-sensitive)
+#   chembl_id               -- optional explicit ChEMBL ID for disambiguation
+#   original_indication     -- short description, not used by the script
+#   repurposed_disease_name -- string match (case-insensitive substring) against
+#                              target_disease.csv disease_name; fall back if
+#                              repurposed_disease_efo is also unset
+#   repurposed_disease_efo  -- OT canonical id (preferred -- exact match)
+#   mechanism_targets       -- the targets we expect to mediate the new
+#                              indication; not required but used to flag
+#                              "the connection is there but via a different
+#                              target than expected"
+#   year_repurposed         -- when the new use entered clinical practice
+#                              (FDA approval where applicable)
+
+cases:
+  - drug: SILDENAFIL
+    original_indication: erectile dysfunction
+    repurposed_disease_name: pulmonary arterial hypertension
+    repurposed_disease_efo: EFO_0001361
+    mechanism_targets: [PDE5A]
+    year_repurposed: 2005
+    notes: Pfizer's Viagra/Revatio -- PDE5 inhibition in pulmonary vasculature.
+
+  - drug: MINOXIDIL
+    original_indication: hypertension
+    repurposed_disease_name: alopecia
+    mechanism_targets: [ABCC9, KCNJ11]
+    year_repurposed: 1988
+    notes: K-ATP channel opener; hair growth was an observed side effect.
+
+  - drug: THALIDOMIDE
+    original_indication: morning sickness
+    repurposed_disease_name: multiple myeloma
+    repurposed_disease_efo: EFO_0001378
+    mechanism_targets: [CRBN]
+    year_repurposed: 2006
+    notes: CRBN-binding immunomodulator; fueled the IMID class.
+
+  - drug: RALOXIFENE
+    original_indication: breast cancer prevention
+    repurposed_disease_name: osteoporosis
+    repurposed_disease_efo: EFO_0003882
+    mechanism_targets: [ESR1, ESR2]
+    year_repurposed: 1997
+    notes: SERM; estrogen-agonist effect on bone preserves BMD.
+
+  - drug: PROPRANOLOL
+    original_indication: hypertension
+    repurposed_disease_name: capillary infantile hemangioma
+    mechanism_targets: [ADRB1, ADRB2]
+    year_repurposed: 2008
+    notes: Beta-blockade reduces VEGF / bFGF in hemangioma endothelium.
+
+  - drug: BUPROPION
+    original_indication: major depressive disorder
+    repurposed_disease_name: nicotine dependence
+    repurposed_disease_efo: EFO_0007474
+    mechanism_targets: [SLC6A3, SLC6A2, CHRNA3]
+    year_repurposed: 1997
+    notes: NDRI plus nicotinic-receptor antagonism.
+
+  - drug: TOPIRAMATE
+    original_indication: epilepsy
+    repurposed_disease_name: migraine disorder
+    mechanism_targets: [SCN1A, CACNA1A, GABRA1]
+    year_repurposed: 2004
+    notes: Multi-target neuronal-excitability modulation.
+
+  - drug: METFORMIN
+    original_indication: type 2 diabetes mellitus
+    repurposed_disease_name: polycystic ovary syndrome
+    repurposed_disease_efo: EFO_0000660
+    mechanism_targets: [PRKAA1, PRKAA2]
+    year_repurposed: 2003
+    notes: AMPK-mediated insulin sensitization in androgen-excess setting.
+
+  - drug: METHOTREXATE
+    original_indication: cancer
+    repurposed_disease_name: rheumatoid arthritis
+    repurposed_disease_efo: EFO_0000685
+    mechanism_targets: [DHFR, ATIC]
+    year_repurposed: 1988
+    notes: DHFR inhibition / anti-inflammatory at low doses.
+
+  - drug: HYDROXYCHLOROQUINE SULFATE
+    original_indication: malaria
+    repurposed_disease_name: systemic lupus erythematosus
+    repurposed_disease_efo: EFO_0002690
+    mechanism_targets: [TLR9, TLR7]
+    year_repurposed: 1955
+    notes: Lysosomal alkalinisation; TLR signaling damping.
+
+  - drug: SPIRONOLACTONE
+    original_indication: hypertension
+    repurposed_disease_name: heart failure
+    repurposed_disease_efo: EFO_0003144
+    mechanism_targets: [NR3C2]
+    year_repurposed: 1999
+    notes: Mineralocorticoid-receptor blockade reverses cardiac remodelling.
+
+  - drug: MEMANTINE HYDROCHLORIDE
+    original_indication: Parkinsonism / spasticity (older European use)
+    repurposed_disease_name: Alzheimer disease
+    repurposed_disease_efo: MONDO_0004975
+    mechanism_targets: [GRIN1, GRIN2A, GRIN2B]
+    year_repurposed: 2003
+    notes: NMDA antagonist; moderate-severe AD approval.
+
+  - drug: TOFACITINIB
+    original_indication: rheumatoid arthritis
+    repurposed_disease_name: ulcerative colitis
+    repurposed_disease_efo: EFO_0000729
+    mechanism_targets: [JAK1, JAK2, JAK3]
+    year_repurposed: 2018
+    notes: Pan-JAK inhibition extended to UC.
+
+  - drug: NALTREXONE
+    original_indication: opioid use disorder
+    repurposed_disease_name: alcohol dependence
+    repurposed_disease_efo: EFO_0003915
+    mechanism_targets: [OPRM1, OPRK1]
+    year_repurposed: 1994
+    notes: Mu-opioid antagonism reduces alcohol reward.
+
+  - drug: DULOXETINE HYDROCHLORIDE
+    original_indication: major depressive disorder
+    repurposed_disease_name: fibromyalgia
+    mechanism_targets: [SLC6A4, SLC6A2]
+    year_repurposed: 2008
+    notes: SNRI; descending pain modulation.
+
+  - drug: PRAZOSIN
+    original_indication: hypertension
+    repurposed_disease_name: post-traumatic stress disorder
+    mechanism_targets: [ADRA1A, ADRA1B, ADRA1D]
+    year_repurposed: 2010
+    notes: Alpha-1 blockade reduces sympathetic arousal in PTSD nightmares.
+
+  - drug: ACETAZOLAMIDE
+    original_indication: glaucoma
+    repurposed_disease_name: idiopathic intracranial hypertension
+    mechanism_targets: [CA2, CA1]
+    year_repurposed: 1980
+    notes: Carbonic anhydrase inhibition lowers CSF production.
+
+  - drug: ARIPIPRAZOLE
+    original_indication: schizophrenia
+    repurposed_disease_name: major depressive disorder
+    repurposed_disease_efo: MONDO_0002009
+    mechanism_targets: [DRD2, HTR1A, HTR2A]
+    year_repurposed: 2007
+    notes: Adjunctive augmentation in treatment-resistant MDD.
+
+  - drug: COLCHICINE
+    original_indication: gout
+    repurposed_disease_name: pericarditis
+    mechanism_targets: [TUBB1, NLRP3]
+    year_repurposed: 1987
+    notes: Microtubule disruption / NLRP3 inhibition.
