@@ -28,7 +28,7 @@ if [[ ! -d "${CHEMBL_DIR}" ]]; then
   tar -xzf "${CHEMBL_ARCHIVE}"
 fi
 
-echo ">> Open Targets parquet datasets (associations, targets, evidence, baselineExpression)"
+echo ">> Open Targets parquet datasets (associations, targets, diseases, evidence, baselineExpression)"
 # Browse https://platform.opentargets.org/downloads for the current FTP path/version.
 OT_VER="${OT_VER:-24.06}"
 OT_BASE_URL="https://ftp.ebi.ac.uk/pub/databases/opentargets/platform/${OT_VER}/output/etl/parquet"
@@ -107,6 +107,7 @@ download_ot_parquet_dir() {
 
 download_ot_parquet_dir "associationByOverallDirect"
 download_ot_parquet_dir "targets"
+download_ot_parquet_dir "diseases"
 download_ot_parquet_dir "evidence"
 download_ot_parquet_dir "baselineExpression"
 
@@ -115,13 +116,17 @@ wget -nc "http://www.ebi.ac.uk/efo/efo.obo"
 
 echo ">> (Optional) STRING full human network for offline expansion"
 wget -nc "https://stringdb-downloads.org/download/protein.links.v12.0/9606.protein.links.v12.0.txt.gz" || true
+# protein.info maps ENSP ids to HGNC symbols (used by build_string_edges.py).
+wget -nc "https://stringdb-downloads.org/download/protein.info.v12.0/9606.protein.info.v12.0.txt.gz" || true
 
 echo ">> (Optional, licensed) DrugBank full database XML -> place full_database.xml here manually"
 
 cat <<'EOF'
 
 Done. Next:
-  1) python scripts/build_full_tables.py     # writes data/full/*.csv (canonical schema)
-  2) edit config.yaml: set 'mode: full' and repoint paths to data/full/*
-  3) make full
+  1) python scripts/build_full_tables.py            # writes data/full/*.csv from OT parquet
+  2) python scripts/build_string_edges.py           # writes data/full/string_edges.csv (~1.9M PPI edges)
+  3) python scripts/build_disease_tissue.py         # writes data/full/disease_tissue.csv from OT therapeutic areas
+  4) python scripts/populate_disease_prevalence.py  # writes data/curated/disease_prevalence.csv from curated dict
+  5) make full
 EOF

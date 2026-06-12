@@ -1,0 +1,90 @@
+# ------------------------------------------------------------------
+# Configuration for the mechanism-driven drug-repurposing screen.
+# Two run modes:
+#   mode: demo   -> uses the bundled CSVs in data/sample (no downloads)
+#   mode: full   -> uses the bulk database files you download (see README)
+# Two engines:
+#   engine: pandas -> in-memory (great up to a few GB)
+#   engine: duckdb -> streams the big target-disease table from disk (full scale)
+# ------------------------------------------------------------------
+
+mode: demo                      # demo | full
+engine: pandas                  # pandas | duckdb
+
+paths:
+  drugs:            data/sample/drugs.csv
+  drug_targets:     data/sample/drug_targets.csv
+  drug_indications: data/sample/drug_indications.csv
+  target_disease:   data/sample/target_disease.csv
+  disease_ontology: data/sample/disease_ontology.csv
+  target_direction: data/sample/target_direction.csv    # directionality evidence (optional)
+  target_expression: data/sample/target_expression.csv   # target x tissue baseline expression
+  disease_tissue:   data/sample/disease_tissue.csv       # disease -> relevant tissue(s)
+  gene_info:        data/sample/gene_info.csv             # gene symbol -> full target name
+  string_edges:     data/sample/string_edges.csv         # offline network; ignored if network.source == api
+  outdir:           output
+
+universe:
+  require_max_phase: 4
+  regions: [us, eu]
+  modalities: [small_molecule, antibody, protein, oligonucleotide, other]
+
+network:
+  enabled: true
+  source: file                  # file (string_edges.csv) | api (live STRING REST)
+  min_confidence: 0.7
+  max_partners: 10
+  neighbor_weight: 0.5
+  string_species: 9606
+  cache_dir: .cache/string
+
+propagation:
+  min_assoc: 0.10
+  aggregate: noisy_or           # noisy_or | max | sum
+  top_targets_kept: 5
+
+novelty:
+  ontology_radius: 1
+  soft: true
+
+direction:
+  # Therapeutic-direction gate. Combines the drug's action_type (does it raise or
+  # lower target activity?) with the target's disease direction-of-effect (does
+  # raising activity drive or protect against the disease?). See README for the model.
+  enabled: true
+  aligned_factor: 1.0           # drug pushes the target the therapeutically useful way
+  opposed_factor: 0.15          # drug pushes it the WRONG way (mechanistically counter-indicated)
+  unknown_factor: 0.6           # no directional evidence -> mild discount, not a veto
+  default_factor: 1.0           # used only when direction.enabled is false
+  align_threshold: 0.34         # |alignment| above this is called aligned/opposed (else 'mixed')
+
+tissue:
+  # Does a driving target actually reach the diseased tissue? Gates the score by the
+  # target's baseline expression in the disease's relevant tissue(s).
+  enabled: true
+  min_expression: 0.25          # expression at/above this counts as 'expressed'
+  absent_factor: 0.3            # target measured but not expressed in the disease tissue
+  unknown_factor: 0.7           # no expression / tissue mapping -> mild discount, not a veto
+
+phylogenetics:
+  # Boost-only: present orthologous-gene model-organism evidence (IMPC mouse KOs by
+  # default, via OT) boosts opportunity by up to (1 + boost_factor); absence applies
+  # no penalty -- not every gene has been knocked out in mouse yet.
+  enabled: false                # demo data ships no phylo_evidence.csv; off in smoke
+  boost_factor: 0.5
+  min_score: 0.0
+  sources: [impc]
+
+scoring:
+  w_mech: 1.0
+  w_novelty: 1.0
+  promiscuity_penalty: true     # divide by sqrt(n direct targets of the drug)
+  min_opportunity: 0.02
+  top_n: 100000
+
+provenance:
+  # Recorded into every output row (data_version) and output/run_metadata.json.
+  chembl_version: "demo-sample"
+  opentargets_version: "demo-sample"
+  string_version: "v12.0"
+  efo_version: "demo-sample"

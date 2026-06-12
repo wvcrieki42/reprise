@@ -1,0 +1,123 @@
+efo_id,disease_name,us_patients,us_prevalence_per_100k,source,as_of
+EFO_0000305,breast cancer,4100000,1235,SEER/ACS cancer survivors estimate,2023
+EFO_0001360,type 2 diabetes mellitus,37300000,11230,CDC National Diabetes Statistics Report,2022
+EFO_0000249,Alzheimer disease,6700000,2020,Alzheimer's Association Facts and Figures,2024
+EFO_0000685,rheumatoid arthritis,1300000,390,CDC / ACR estimates,2022
+EFO_0000384,Crohn disease,780000,235,CCFA / NIDDK estimates,2020
+EFO_0000729,ulcerative colitis,907000,273,CCFA / NIDDK estimates,2020
+EFO_0000768,idiopathic pulmonary fibrosis,100000,30,NIH RareDiseases / PFF estimate,2020
+EFO_0000253,amyotrophic lateral sclerosis,32000,10,ALS Association estimates,2023
+EFO_0002508,Parkinson disease,1000000,300,Parkinson's Foundation estimates,2023
+EFO_0003885,multiple sclerosis,1000000,300,National MS Society estimates,2022
+EFO_0001359,diabetes mellitus,38400000,11600,CDC National Diabetes Statistics Report,2022
+EFO_0000270,asthma,25000000,7500,CDC NHIS,2022
+EFO_0000341,inflammatory bowel disease,1600000,480,CCFA / CDC estimates,2020
+EFO_0003898,Huntington disease,30000,9,Huntington's Disease Society of America,2022
+EFO_0006791,non-alcoholic steatohepatitis,5000000,1505,NASH / NAFLD adult prevalence estimates,2022
+EFO_0001073,obesity,108000000,32500,CDC NHANES adult obesity prevalence,2022
+EFO_0004611,hypercholesterolemia,28000000,8430,CDC heart disease and cholesterol surveillance,2022
+EFO_1001050,pulmonary arterial hypertension,40000,12,Pulmonary Hypertension Association rare-disease estimate,2022
+EFO_0000756,erectile dysfunction,18000000,5420,NIH / NIDDK adult male prevalence estimate,2022
+EFO_0004274,gout,9200000,2770,CDC NHANES / Arthritis Foundation,2022
+EFO_IPF,Idiopathic pulmonary fibrosis (demo),100000,30,demo,2024
+EFO_ALS,Amyotrophic lateral sclerosis (demo),32000,10,demo,2024
+EFO_UC,Ulcerative colitis (demo),907000,273,demo,2024
+EFO_RA,Rheumatoid arthritis (demo),1300000,390,demo,2024
+EFO_AD,Alzheimer disease (demo),6700000,2020,demo,2024
+EFO_BC,Breast cancer (demo),4100000,1235,demo,2024
+EFO_PAH,Pulmonary arterial hypertension (demo),40000,12,demo,2024
+EFO_T2D,Type 2 diabetes mellitus (demo),37300000,11230,demo,2024
+MONDO_0007254,breast cancer,4100000,1235,SEER cancer survivors estimate,2023
+MONDO_0008315,prostate cancer,3500000,1055,SEER cancer survivors estimate,2023
+MONDO_0005575,colorectal cancer,1500000,452,SEER cancer survivors estimate,2023
+MONDO_0008903,lung cancer,660000,199,SEER cancer survivors estimate,2023
+MONDO_0002108,thyroid cancer,1000000,301,SEER cancer survivors estimate,2023
+MONDO_0002715,uterine cancer,870000,262,SEER cancer survivors estimate,2023
+MONDO_0002367,kidney cancer,760000,229,SEER cancer survivors estimate,2023
+EFO_0000095,chronic lymphocytic leukemia,200000,60,SEER / LLS estimates,2023
+MONDO_0008170,ovarian cancer,250000,75,SEER cancer survivors estimate,2023
+EFO_0001378,multiple myeloma,160000,48,SEER / LLS estimates,2023
+EFO_0000222,acute myeloid leukemia,90000,27,SEER / LLS estimates,2023
+EFO_0000220,acute lymphoblastic leukemia,60000,18,SEER / LLS estimates,2023
+MONDO_0001056,gastric cancer,130000,39,SEER cancer survivors estimate,2023
+MONDO_0007576,esophageal cancer,50000,15,SEER cancer survivors estimate,2023
+EFO_0000182,hepatocellular carcinoma,75000,23,SEER liver cancer survivors estimate,2023
+EFO_0000519,glioblastoma multiforme,15000,5,ABTA / NIH brain tumor estimates,2023
+EFO_0005543,glioma,25000,8,ABTA / NIH brain tumor estimates,2023
+EFO_0000681,renal cell carcinoma,760000,229,SEER kidney cancer survivors estimate,2023
+MONDO_0002974,cervical cancer,290000,87,SEER cancer survivors estimate,2023
+EFO_0000181,head and neck squamous cell carcinoma,300000,90,SEER oral/pharynx cancer survivors estimate,2023
+MONDO_0011719,gastrointestinal stromal tumor,40000,12,GIST patient registry estimates,2022
+EFO_0000537,hypertension,116000000,34980,CDC NHANES adult prevalence,2022
+EFO_0001645,coronary artery disease,20000000,6030,CDC heart disease surveillance,2022
+EFO_0003144,heart failure,6700000,2020,AHA heart disease statistics,2023
+EFO_0000275,atrial fibrillation,6000000,1810,CDC heart disease surveillance,2022
+EFO_0000712,stroke,7500000,2260,CDC stroke surveillance / AHA,2022
+EFO_0004286,venous thromboembolism,900000,271,CDC annual incidence estimate,2022
+MONDO_0005147,type 1 diabetes mellitus,2000000,600,CDC National Diabetes Statistics Report,2022
+MONDO_0005148,type 2 diabetes mellitus,37300000,11230,CDC National Diabetes Statistics Report,2022
+EFO_0000400,diabetes mellitus,38400000,11600,CDC National Diabetes Statistics Report,2022
+HP_0003124,hypercholesterolemia,28000000,8430,CDC heart disease surveillance,2022
+EFO_0000195,metabolic syndrome,66700000,20090,CDC NHANES adult prevalence,2022
+MONDO_0004979,asthma,25000000,7530,CDC NHIS,2022
+EFO_0001361,pulmonary arterial hypertension,40000,12,PHA rare-disease estimate,2022
+MONDO_0009061,cystic fibrosis,40000,12,CF Foundation patient registry,2022
+MONDO_0004822,bronchiectasis,500000,151,American Lung Association estimate,2022
+EFO_0003767,inflammatory bowel disease,1600000,482,CCFA / CDC estimates,2020
+EFO_0000555,irritable bowel syndrome,30000000,9040,Rome Foundation / NIDDK estimates,2022
+EFO_0003948,gastroesophageal reflux disease,60000000,18080,NIDDK adult prevalence estimate,2022
+EFO_0001060,celiac disease,3000000,904,NIDDK / Beyond Celiac estimates,2022
+EFO_0003095,non-alcoholic fatty liver disease,80000000,24100,AASLD adult prevalence estimate,2022
+EFO_1001249,non-alcoholic steatohepatitis,5000000,1510,AASLD NASH adult prevalence estimate,2022
+MONDO_0007915,systemic lupus erythematosus,200000,60,Lupus Foundation estimates,2022
+EFO_0000676,psoriasis,7500000,2260,AAD / NPF estimates,2022
+EFO_0003778,psoriatic arthritis,1500000,452,NPF / ACR estimates,2022
+EFO_0000699,sjogren syndrome,250000,75,Sjogren's Foundation estimates,2022
+EFO_0004208,vitiligo,1000000,301,AAD estimates,2022
+EFO_0004192,alopecia areata,700000,211,NAAF estimates,2022
+MONDO_0004975,alzheimer disease,6700000,2020,Alzheimer's Association Facts and Figures,2024
+MONDO_0005180,parkinson disease,1000000,301,Parkinson's Foundation estimates,2023
+MONDO_0007739,huntington disease,30000,9,Huntington's Disease Society of America,2022
+MONDO_0004976,amyotrophic lateral sclerosis,32000,10,ALS Association estimates,2023
+MONDO_0005301,multiple sclerosis,1000000,301,National MS Society estimates,2022
+EFO_0000474,epilepsy,3400000,1025,CDC adult epilepsy surveillance,2022
+MONDO_0005277,migraine disorder,39000000,11750,AMF / CDC headache estimates,2022
+MONDO_0002009,major depressive disorder,21000000,6330,NIMH / SAMHSA estimates,2022
+MONDO_0005090,schizophrenia,2600000,783,NIMH adult prevalence estimate,2022
+MONDO_0004985,bipolar disorder,7000000,2110,NIMH adult prevalence estimate,2022
+EFO_1001892,generalized anxiety disorder,7000000,2110,NIMH adult prevalence estimate,2022
+EFO_0003756,autism spectrum disorder,5400000,1628,CDC ADDM Network estimates,2022
+EFO_0003888,attention deficit hyperactivity disorder,10000000,3010,CDC NSCH / NIMH estimates,2022
+EFO_0003884,chronic kidney disease,35000000,10550,CDC CKD surveillance system,2022
+EFO_1001496,autosomal dominant polycystic kidney disease,600000,181,PKD Foundation estimates,2022
+EFO_0001365,age-related macular degeneration,11000000,3310,NEI / AAO estimates,2022
+MONDO_0005041,glaucoma,3000000,904,NEI estimates,2022
+EFO_0003770,diabetic retinopathy,9600000,2890,NEI / ADA estimates,2022
+MONDO_0019200,retinitis pigmentosa,100000,30,Foundation Fighting Blindness estimates,2022
+EFO_1000760,rosacea,16000000,4820,NRS / AAD estimates,2022
+EFO_1000710,hidradenitis suppurativa,350000,105,HS Foundation / NORD estimates,2022
+MONDO_0010679,duchenne muscular dystrophy,15000,5,MDA / NORD estimates,2022
+EFO_0008525,spinal muscular atrophy,25000,8,Cure SMA / MDA estimates,2022
+MONDO_0010602,hemophilia a,21000,6,NHF / CDC estimates,2022
+MONDO_0010604,hemophilia b,4000,1,NHF / CDC estimates,2022
+MONDO_0018150,gaucher disease,6000,2,NGF / NORD estimates,2022
+MONDO_0010526,fabry disease,6000,2,NORD / NIH estimates,2022
+MONDO_0009290,glycogen storage disease ii,5000,2,AMDA / NORD estimates (Pompe disease),2022
+MONDO_0007947,marfan syndrome,200000,60,Marfan Foundation / NORD estimates,2022
+MONDO_0020066,ehlers-danlos syndrome,200000,60,EDS Society estimates,2022
+MONDO_0018975,neurofibromatosis type 1,100000,30,CTF / NORD estimates,2022
+EFO_0004705,hypothyroidism,16700000,5030,ATA adult prevalence estimate,2022
+EFO_0009189,hyperthyroidism,4700000,1410,ATA adult prevalence estimate,2022
+EFO_0000660,polycystic ovary syndrome,5000000,1510,ENDO Society adult female estimate,2022
+EFO_0003882,osteoporosis,10000000,3010,NOF / Bone Health & Osteoporosis Foundation,2022
+MONDO_0001187,urinary bladder cancer,730000,220,SEER cancer survivors estimate,2023
+EFO_0002618,pancreatic carcinoma,100000,30,SEER pancreatic cancer survivors estimate,2023
+EFO_0000339,chronic myelogenous leukemia,70000,21,SEER / LLS estimates,2023
+EFO_0004265,peripheral arterial disease,8500000,2560,CDC / AHA estimates,2022
+EFO_0004220,chronic hepatitis c virus infection,2400000,723,CDC viral hepatitis surveillance,2022
+EFO_0004197,hepatitis b virus infection,850000,256,CDC viral hepatitis surveillance (chronic carriers),2022
+EFO_0006792,lewy body dementia,1400000,422,LBDA estimates,2022
+EFO_0004194,iga glomerulonephritis,150000,45,NIDDK / NORD estimates (IgA nephropathy),2022
+EFO_0000274,atopic eczema,32000000,9640,AAD / NEA adult+pediatric atopic dermatitis estimates,2022
+EFO_0000765,aids,1200000,362,CDC HIV/AIDS surveillance report,2022
+MONDO_0011382,sickle cell anemia,100000,30,CDC / SCDAA estimates,2022
