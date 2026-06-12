@@ -15,6 +15,7 @@ paths:
   disease_tissue:   data/full/disease_tissue.csv          # curated disease -> tissue map
   gene_info:        data/full/gene_info.csv               # from adapters.opentargets_gene_info
   chembl_substance_map: data/full/chembl_substance_map.csv # from adapters.chembl_substance_map
+  disease_synonyms: data/full/disease_synonyms.csv        # from adapters.opentargets_disease_synonyms
   string_edges:     data/full/string_edges.csv            # from scripts/build_string_edges.py
   outdir:           output_full
 
