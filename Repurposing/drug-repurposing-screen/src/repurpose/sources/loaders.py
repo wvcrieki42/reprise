@@ -101,6 +101,8 @@ def load_phylo_evidence(path: Path) -> pd.DataFrame:
                                      "n_models", "sources"])
     df = _read(p)
     df["phylo_score"] = pd.to_numeric(df["phylo_score"], errors="coerce").fillna(0.0)
+    df["n_models"] = pd.to_numeric(df["n_models"], errors="coerce").fillna(0).astype(int)
+    df["sources"] = df["sources"].fillna("").astype(str)
     return df[["target_symbol", "efo_id", "phylo_score", "n_models", "sources"]]
 
 

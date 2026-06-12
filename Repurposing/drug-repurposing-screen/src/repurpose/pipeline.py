@@ -122,6 +122,20 @@ def _prepare(cfg: Config, log):
     log(f"drug-target edges after expansion: {len(dt)} "
         f"({int(dt['is_direct'].sum())} direct, {int((~dt['is_direct']).sum())} neighbour)")
 
+    # Prune target_expression to only (tissues, targets) the join can actually reach.
+    # At full scale (53k disease_tissue rows + 4.8M expression rows) the unfiltered
+    # cross-join blows DuckDB's temp budget; restricting to the ~32 tissues in
+    # disease_tissue and the ~15k targets in the drug-target edges cuts it by >10x.
+    if tissue_on and not target_expression.empty:
+        rel_tissues = set(disease_tissue["tissue"].dropna())
+        rel_targets = set(dt["target_symbol"].dropna())
+        target_expression = target_expression[
+            target_expression["tissue"].isin(rel_tissues)
+            & target_expression["target_symbol"].isin(rel_targets)
+        ].reset_index(drop=True)
+        log(f"target_expression pruned to relevant (tissue, target) pairs: "
+            f"{len(target_expression):,} rows")
+
     known_exp = steps.known_expanded(indications, ontology, cfg)
     direct = drug_targets_raw.merge(universe[["drug_id"]], on="drug_id", how="inner")
     breadth = (direct.groupby("drug_id")["target_symbol"].nunique()
@@ -208,6 +222,7 @@ def run_from_file(config_path: str | Path, verbose: bool = True) -> pd.DataFrame
             "novelty_radius": cfg.get("novelty", "ontology_radius", default=1),
             "direction_enabled": cfg.get("direction", "enabled", default=False),
             "tissue_enabled": cfg.get("tissue", "enabled", default=False),
+            "phylogenetics_enabled": cfg.get("phylogenetics", "enabled", default=False),
             "literature_enabled": cfg.get("literature", "enabled", default=False),
             "literature_top_n": cfg.get("literature", "top_n", default=5000),
             "w_investigation": cfg.get("scoring", "w_investigation", default=0.0),

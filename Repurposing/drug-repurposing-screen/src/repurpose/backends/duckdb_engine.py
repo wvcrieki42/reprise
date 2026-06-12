@@ -56,6 +56,10 @@ def run_duckdb(cfg: Config, prep: dict, log=lambda m: None) -> pd.DataFrame:
     phylo_boost = float(cfg.get("phylogenetics", "boost_factor", default=0.5))
 
     con = duckdb.connect()
+    # Hint DuckDB to be modest with memory/threads -- the disease_tissue x
+    # target_expression cross-product is hot enough to thrash without bounds.
+    con.execute("PRAGMA memory_limit='8GB'")
+    con.execute("PRAGMA threads=4")
     con.register("dt", prep["drug_targets"])
     con.register("tdir", prep["target_direction"])
     con.register("texpr", prep["target_expression"])

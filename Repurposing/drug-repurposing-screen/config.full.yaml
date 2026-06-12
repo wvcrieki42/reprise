@@ -14,7 +14,7 @@ paths:
   target_expression: data/full/target_expression.csv      # from adapters.opentargets_target_expression
   disease_tissue:   data/full/disease_tissue.csv          # curated disease -> tissue map
   gene_info:        data/full/gene_info.csv               # from adapters.opentargets_gene_info
-  string_edges:     data/sample/string_edges.csv          # file-mode fallback edge list
+  string_edges:     data/full/string_edges.csv            # from scripts/build_string_edges.py
   outdir:           output_full
 
 universe:
@@ -56,7 +56,7 @@ phylogenetics:
   # ABSENT evidence applies no penalty (factor 1.0). Rationale: model-
   # organism studies aren't run for every gene yet, so absence is not
   # evidence against the target.
-  enabled: false
+  enabled: true                # on by default at full scale -- 630k evidence rows
   boost_factor: 0.5            # max boost: opp *= 1.5 when phylo_score = 1.0
   min_score: 0.0               # filter weak evidence rows before aggregation
   sources: [impc]              # extend with gene2phenotype etc. as needed
@@ -81,7 +81,7 @@ market:
   # us_prevalence_per_100k, and an is_orphan flag (< 200k US patients =
   # FDA Orphan Drug Act threshold). Inspection-only: never changes
   # opportunity or rank -- you sort/filter by these columns downstream.
-  enabled: false
+  enabled: true                # 122-disease curated CSV ready out of the box
   top_n: 10000
   curated_csv: data/curated/disease_prevalence.csv
   rare_disease_us_threshold: 200000
