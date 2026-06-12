@@ -75,6 +75,21 @@ make full
 - `output/repurposing_hypotheses.csv`
 - `output/run_metadata.json`
 
+## Latest demo verification
+Most recent local validation run:
+
+```bash
+make demo
+```
+
+Result:
+- Exit code: `0` (success)
+- Universe size: `12` approved US/EU drugs
+- Final ranked hypotheses: `35`
+- Artifacts written:
+  - `output/repurposing_hypotheses.csv`
+  - `output/run_metadata.json`
+
 ## Common troubleshooting
 ### NumPy architecture mismatch (Apple Silicon)
 If you get import errors mentioning incompatible architecture (`x86_64` vs `arm64`):
