@@ -590,6 +590,82 @@ def add_pathway_evidence(ranked: pd.DataFrame, drug_targets: pd.DataFrame,
 
 
 # ----------------------------------------------------------------------
+# Step 5h - severity flag: receptor-LoF + agonist drug = futile
+# ----------------------------------------------------------------------
+_SEVERITY_KEYWORDS = (
+    "deficiency", "complete absence", "complete loss", "null mutation",
+    "null variant", "donohue", "rabson-mendenhall",
+)
+
+
+def flag_severity_concern(ranked: pd.DataFrame, drug_targets: pd.DataFrame,
+                          cfg: Config) -> pd.DataFrame:
+    """Flag (drug, disease) pairs where a `disease_gene_match` row also has
+    severity language ('deficiency', etc.) AND the drug is an AGONIST on the
+    named gene -- the classic 'give the agonist to the broken receptor' trap.
+
+    INSULIN (INSR AGONIST) -> 'hyperinsulinism due to INSR deficiency' (futile)
+    PEGFILGRASTIM (CSF3R AGONIST) -> '...due to CSF3R deficiency' (futile)
+
+    But: TZDs -> 'PPARG-related familial partial lipodystrophy' (no
+    'deficiency' keyword -> not flagged -> kept as a legit hypothesis).
+    Calcimimetics -> 'familial hypocalciuric hypercalcemia 1' (same).
+
+    Optionally damps opportunity by severity.damp_factor (default 0.7 = a
+    71% knockdown). Inspection-only when damp_factor == 0.
+    """
+    if not bool(cfg.get("severity", "enabled", default=True)):
+        out = ranked.copy()
+        out["severity_concern"] = ""
+        return out
+
+    damp = float(cfg.get("severity", "damp_factor", default=0.7))
+    out = ranked.copy()
+    out["severity_concern"] = ""
+    if "disease_gene_match" not in out.columns or "disease_name" not in out.columns:
+        return out
+
+    # Per (drug, target) action_type lookup over DIRECT targets only.
+    dt = drug_targets
+    if "is_direct" in dt.columns:
+        dt = dt[dt["is_direct"]]
+    actions: dict[tuple[str, str], str] = {
+        (row.drug_id, row.target_symbol): (row.action_type or "").upper().strip()
+        for row in dt[["drug_id", "target_symbol", "action_type"]].itertuples(index=False)
+    }
+    agonist_actions = _ACTION_UP | {"AGONIST", "ACTIVATOR"}
+
+    flags = []
+    for _, row in out.iterrows():
+        match = row.get("disease_gene_match") or ""
+        if not match:
+            flags.append("")
+            continue
+        disease_name = (row.get("disease_name") or "").lower()
+        if not any(kw in disease_name for kw in _SEVERITY_KEYWORDS):
+            flags.append("")
+            continue
+        triggered = False
+        for gene in match.split(","):
+            action = actions.get((row.drug_id, gene), "")
+            if action in agonist_actions:
+                triggered = True
+                break
+        flags.append("severe_loF_agonist" if triggered else "")
+    out["severity_concern"] = flags
+
+    if damp > 0 and (out["severity_concern"] != "").any():
+        mask = out["severity_concern"] == "severe_loF_agonist"
+        out.loc[mask, "opportunity"] = (
+            out.loc[mask, "opportunity"] * (1.0 - damp)
+        ).round(5)
+        out = out.sort_values("opportunity", ascending=False).reset_index(drop=True)
+        if "rank" in out.columns:
+            out["rank"] = out.index + 1
+    return out
+
+
+# ----------------------------------------------------------------------
 # Step 5e - active-substance grouping (collapse formulation variants)
 # ----------------------------------------------------------------------
 def collapse_to_substances(ranked: pd.DataFrame, substance_map: pd.DataFrame,

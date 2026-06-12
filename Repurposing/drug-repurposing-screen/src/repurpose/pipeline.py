@@ -21,7 +21,7 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "substance_chembl_id", "substance
                "tissue_factor", "tissue_status", "tissue_evidence",
                "phylo_factor", "phylo_score", "phylo_n_models", "phylo_sources",
                "pathway_factor", "pathway_score", "n_pathway_overlap",
-               "disease_gene_match",
+               "disease_gene_match", "severity_concern",
                "pubmed_count", "europepmc_count", "trial_count", "patent_count",
                "investigation_prior",
                "us_patients", "us_prevalence_per_100k", "is_orphan",
@@ -273,6 +273,16 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
         ranked, direct_dt, prep["gene_info"])
     ranked = ranked.merge(concord, on=["drug_id", "efo_id"], how="left")
     ranked["disease_gene_match"] = ranked["disease_gene_match"].fillna("")
+    # Severity damping: receptor-LoF + agonist drug = futile (insulins ->
+    # INSR-deficiency, G-CSF -> CSF3R-deficiency). Damps after disease_gene_match
+    # is in hand and BEFORE the literature pass so the API budget goes to the
+    # genuinely promising candidates instead.
+    before_severe = (ranked.get("severity_concern", pd.Series(dtype=str)) == "severe_loF_agonist").sum() \
+        if "severity_concern" in ranked.columns else 0
+    ranked = steps.flag_severity_concern(ranked, direct_dt, cfg)
+    n_severe = (ranked["severity_concern"] == "severe_loF_agonist").sum()
+    if n_severe:
+        log(f"severity flag: damped {n_severe} 'receptor LoF + agonist' hypotheses")
     ranked = _maybe_literature_pass(ranked, cfg, prep, log)
     ranked = _maybe_kol_pass(ranked, cfg, log)
     ranked = _maybe_market_pass(ranked, cfg, log)
