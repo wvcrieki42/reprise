@@ -86,7 +86,14 @@ def chembl_drug_indications(sqlite_path: str) -> pd.DataFrame:
         df = pd.read_sql(sql, con).drop_duplicates()
     finally:
         con.close()
-    df["efo_id"] = df["efo_id"].str.replace("EFO:", "EFO_", regex=False)
+    # ChEMBL exports ontology IDs in colon form for non-EFO sources
+    # (MONDO:0005148, HP:0000863, etc.). The rest of the pipeline uses
+    # the underscore form (MONDO_0005148, HP_0000863, EFO_0001360). Without
+    # this normalisation, MONDO-coded indications NEVER match OT's
+    # target_disease EFO IDs and approved drugs (SGLT2 inhibitors for T2D,
+    # CFTR modulators for cystic fibrosis, etc.) keep getting flagged
+    # "novel" because the novelty subtraction silently fails.
+    df["efo_id"] = df["efo_id"].str.replace(":", "_", regex=False)
     return df
 
 

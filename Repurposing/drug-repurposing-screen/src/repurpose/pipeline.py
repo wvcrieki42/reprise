@@ -136,6 +136,8 @@ def _prepare(cfg: Config, log):
         log(f"target_expression pruned to relevant (tissue, target) pairs: "
             f"{len(target_expression):,} rows")
 
+    indications = steps.expand_indications_by_target_class(
+        indications, drug_targets_raw, cfg)
     known_exp = steps.known_expanded(indications, ontology, cfg)
     direct = drug_targets_raw.merge(universe[["drug_id"]], on="drug_id", how="inner")
     breadth = (direct.groupby("drug_id")["target_symbol"].nunique()

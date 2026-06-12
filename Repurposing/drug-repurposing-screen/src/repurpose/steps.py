@@ -286,6 +286,52 @@ def add_phylo_evidence(edges: pd.DataFrame, phylo: pd.DataFrame,
 
 
 # ----------------------------------------------------------------------
+# Step 4a - close ChEMBL indication-coverage gaps via target-class roll-up
+# ----------------------------------------------------------------------
+def expand_indications_by_target_class(
+    indications: pd.DataFrame, drug_targets: pd.DataFrame, cfg: Config,
+) -> pd.DataFrame:
+    """Augment indications so all drugs with the same direct (target,action) set share them.
+
+    ChEMBL annotates indications on individual drug entries, but many
+    proteins / biologics have one ChEMBL row per formulation
+    (INSULIN ASPART vs INSULIN ASPART PROTAMINE RECOMBINANT) and the
+    indication only lives on one of them. Without this step the
+    formulation gets flagged "novel" for its on-label disease and
+    pollutes the top of the screen.
+
+    Roll-up rule (intentionally narrow): two drugs share indications IFF
+    they have IDENTICAL frozensets of (direct target_symbol, action_type)
+    pairs. STRING neighbours are excluded -- they aren't the drug's real
+    targets. With this rule a kinase inhibitor doesn't inherit from every
+    other kinase inhibitor (target sets differ), but every insulin
+    inherits from every other insulin (all are INSR-AGONIST).
+    """
+    if not bool(cfg.get("novelty", "expand_by_target_class", default=True)):
+        return indications
+    if indications.empty or drug_targets.empty:
+        return indications
+    dt = drug_targets.copy()
+    if "is_direct" in dt.columns:
+        dt = dt[dt["is_direct"]]
+    if dt.empty:
+        return indications
+    dt["pair"] = list(zip(dt["target_symbol"].fillna(""),
+                          dt["action_type"].fillna("")))
+    class_key = (dt.groupby("drug_id")["pair"]
+                   .apply(lambda s: tuple(sorted(set(s))))
+                   .rename("class_key").reset_index())
+    ind_with_class = indications.merge(class_key, on="drug_id", how="inner")
+    class_inds = (ind_with_class[["class_key", "efo_id", "indication_name"]]
+                    .drop_duplicates())
+    rolled = class_key.merge(class_inds, on="class_key", how="inner")[
+        ["drug_id", "efo_id", "indication_name"]]
+    combined = pd.concat([indications, rolled], ignore_index=True).drop_duplicates(
+        subset=["drug_id", "efo_id"], keep="first").reset_index(drop=True)
+    return combined
+
+
+# ----------------------------------------------------------------------
 # Step 4 - novelty
 # ----------------------------------------------------------------------
 def known_expanded(indications: pd.DataFrame, ontology: pd.DataFrame,

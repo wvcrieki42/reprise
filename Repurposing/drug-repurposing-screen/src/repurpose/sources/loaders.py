@@ -40,6 +40,10 @@ def load_drug_indications(path: Path) -> pd.DataFrame:
     df = _read(path)
     if "indication_name" not in df:
         df["indication_name"] = ""
+    # Normalise ontology id format so the colon-vs-underscore mismatch
+    # never blocks the novelty join (ChEMBL exports MONDO:/HP: with colons,
+    # but OT target_disease uses MONDO_/HP_/EFO_ with underscores).
+    df["efo_id"] = df["efo_id"].astype(str).str.replace(":", "_", regex=False)
     return df[["drug_id", "efo_id", "indication_name"]]
 
 

@@ -58,8 +58,10 @@ def run_duckdb(cfg: Config, prep: dict, log=lambda m: None) -> pd.DataFrame:
     con = duckdb.connect()
     # Hint DuckDB to be modest with memory/threads -- the disease_tissue x
     # target_expression cross-product is hot enough to thrash without bounds.
+    # Fewer threads = smaller multiplicative temp footprint per stage.
     con.execute("PRAGMA memory_limit='8GB'")
-    con.execute("PRAGMA threads=4")
+    con.execute("PRAGMA threads=2")
+    con.execute("PRAGMA preserve_insertion_order=false")
     con.register("dt", prep["drug_targets"])
     con.register("tdir", prep["target_direction"])
     con.register("texpr", prep["target_expression"])
