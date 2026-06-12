@@ -57,6 +57,23 @@ def parquet_paths(dataset_dir: Path) -> list[str]:
         raise FileNotFoundError(f"No parquet files found under {dataset_dir}")
     return [str(p) for p in paths]
 
+def export_filtered_csv(df: pd.DataFrame, out_path: Path, key_cols: list[str], label: str) -> None:
+    """Drop rows with null values in key columns, then export to CSV."""
+    missing = [c for c in key_cols if c not in df.columns]
+    if missing:
+        raise KeyError(f"{label}: missing required key columns: {missing}")
+    filtered = df.copy()
+    null_like_strings = {"", "NA", "N/A", "NULL", "NONE", "NAN"}
+    for col in key_cols:
+        if pd.api.types.is_object_dtype(filtered[col]) or pd.api.types.is_string_dtype(filtered[col]):
+            normalized = filtered[col].astype("string").str.strip()
+            normalized = normalized.mask(normalized.str.upper().isin(null_like_strings), pd.NA)
+            filtered[col] = normalized
+    dropped = int(filtered[key_cols].isna().any(axis=1).sum())
+    if dropped:
+        print(f"{label}: dropping {dropped} rows with null key values in {key_cols}")
+    filtered.dropna(subset=key_cols).to_csv(out_path, index=False)
+
 
 def main() -> None:
     chembl_sqlite = resolve_chembl_sqlite()
@@ -67,17 +84,62 @@ def main() -> None:
     ot_baseline = parquet_paths(OT_BASELINE)
     print(f"Using ChEMBL DB: {chembl_sqlite}")
     print(f"Using OT gene map: {gene_map_csv}")
-    print("ChEMBL -> drugs.csv");            adapters.chembl_drugs(str(chembl_sqlite)).to_csv(FULL/"drugs.csv", index=False)
-    print("ChEMBL -> drug_targets.csv");      adapters.chembl_drug_targets(str(chembl_sqlite)).to_csv(FULL/"drug_targets.csv", index=False)
-    print("ChEMBL -> drug_indications.csv");  adapters.chembl_drug_indications(str(chembl_sqlite)).to_csv(FULL/"drug_indications.csv", index=False)
+    print("ChEMBL -> drugs.csv")
+    export_filtered_csv(
+        adapters.chembl_drugs(str(chembl_sqlite)),
+        FULL / "drugs.csv",
+        ["drug_id", "drug_name"],
+        "drugs.csv",
+    )
+    print("ChEMBL -> drug_targets.csv")
+    export_filtered_csv(
+        adapters.chembl_drug_targets(str(chembl_sqlite)),
+        FULL / "drug_targets.csv",
+        ["drug_id", "target_symbol"],
+        "drug_targets.csv",
+    )
+    print("ChEMBL -> drug_indications.csv")
+    export_filtered_csv(
+        adapters.chembl_drug_indications(str(chembl_sqlite)),
+        FULL / "drug_indications.csv",
+        ["drug_id", "efo_id"],
+        "drug_indications.csv",
+    )
     print("Open Targets -> target_disease.csv")
-    adapters.opentargets_target_disease(ot_assoc, str(gene_map_csv)).to_csv(FULL/"target_disease.csv", index=False)
+    export_filtered_csv(
+        adapters.opentargets_target_disease(ot_assoc, str(gene_map_csv)),
+        FULL / "target_disease.csv",
+        ["target_symbol", "efo_id", "assoc_score"],
+        "target_disease.csv",
+    )
     print("Open Targets -> target_direction.csv")
-    adapters.opentargets_target_direction(ot_evidence, str(gene_map_csv)).to_csv(FULL/"target_direction.csv", index=False)
-    print("Open Targets -> gene_info.csv");   adapters.opentargets_gene_info(ot_targets).to_csv(FULL/"gene_info.csv", index=False)
+    export_filtered_csv(
+        adapters.opentargets_target_direction(ot_evidence, str(gene_map_csv)),
+        FULL / "target_direction.csv",
+        ["target_symbol", "efo_id", "therapeutic_direction"],
+        "target_direction.csv",
+    )
+    print("Open Targets -> gene_info.csv")
+    export_filtered_csv(
+        adapters.opentargets_gene_info(ot_targets),
+        FULL / "gene_info.csv",
+        ["symbol", "gene_name"],
+        "gene_info.csv",
+    )
     print("Open Targets -> target_expression.csv")
-    adapters.opentargets_target_expression(ot_baseline, str(gene_map_csv)).to_csv(FULL/"target_expression.csv", index=False)
-    print("EFO -> disease_ontology.csv");     adapters.efo_ontology(str(EFO_OBO)).to_csv(FULL/"disease_ontology.csv", index=False)
+    export_filtered_csv(
+        adapters.opentargets_target_expression(ot_baseline, str(gene_map_csv)),
+        FULL / "target_expression.csv",
+        ["target_symbol", "tissue", "expression"],
+        "target_expression.csv",
+    )
+    print("EFO -> disease_ontology.csv")
+    export_filtered_csv(
+        adapters.efo_ontology(str(EFO_OBO)),
+        FULL / "disease_ontology.csv",
+        ["efo_id", "parent_efo_id"],
+        "disease_ontology.csv",
+    )
     print("NOTE: disease_tissue.csv (disease -> UBERON tissue) is curated/derived; see README.")
     print("Done. Set mode: full in config.yaml and point paths at data/full/*.")
 
