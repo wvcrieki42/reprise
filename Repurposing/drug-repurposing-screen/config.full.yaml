@@ -111,8 +111,11 @@ literature:
   max_synonyms_target: 4       # OR full gene name + aliases into target side
   max_synonyms_disease: 4      # OR disease synonyms into disease side (when supplied)
   max_workers: 4
-  # ncbi_api_key: "..."        # set to raise PubMed throughput from 3 to 10 req/s
-  # lens_api_token: "..."      # https://www.lens.org/lens/user/subscriptions (free tier)
+  # ncbi_api_key: "..."        # 3 -> 10 req/s on PubMed (free key: https://www.ncbi.nlm.nih.gov/account/)
+  # lens_api_token: "..."      # https://www.lens.org/lens/user/subscriptions (free academic tier)
+  # ^^ Both of these prefer env vars -- export NCBI_API_KEY=... and
+  # LENS_API_TOKEN=... in your shell instead of putting them here.
+  # Setting LENS_API_TOKEN auto-enables enable_lens unless you set it to false.
 
 provenance:
   chembl_version: "34"

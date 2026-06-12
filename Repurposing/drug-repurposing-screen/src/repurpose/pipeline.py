@@ -55,7 +55,7 @@ def _maybe_literature_pass(ranked: pd.DataFrame, cfg: Config, prep: dict, log) -
     )
     n_query = min(int(cfg.get("literature", "top_n", default=5000)), len(ranked))
     log(f"literature pass: querying top {n_query} of {len(ranked)} hypotheses "
-        f"(cache_dir={cache_dir})")
+        f"(cache_dir={cache_dir}; {lit.credentials_summary()})")
     # Attach gene_name as a target synonym so the client's OR expansion picks it up.
     gi = prep.get("gene_info")
     if gi is not None and {"symbol", "gene_name"}.issubset(gi.columns):
