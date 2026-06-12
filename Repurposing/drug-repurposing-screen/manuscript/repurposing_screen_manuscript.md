@@ -35,7 +35,10 @@ In-silico screens have proliferated alongside the public biomedical resources th
 
 A persistent weakness across this family of tools, however, is that they end at a mechanism score. Useful as that is, a score alone cannot answer the questions that determine whether a candidate is actionable: Is the indication actually novel? Does the drug push the target in a direction the disease's genetic mechanism predicts is therapeutic? Is the target expressed in the disease tissue? For monogenic disorders, can the drug engage what the disease has broken? What is the substance's IP runway, and is there generic competition? What is the patient population — and does it qualify for orphan exclusivity? Has the literature already saturated this hypothesis? Which clinician is the natural lead investigator? These are the questions a fund partner or clinical-development lead asks before a repurposing programme advances.
 
-Here we describe a screen designed to answer all of these in a single pipeline. We use only free public data, validate the mechanism layer against 19 known repurposing successes, and ship the candidate per-hypothesis as a PDF brief identifying a regional Key Opinion Leader and proposing a tractable collaboration model. The screen scales to all of approved pharma × all of disease ontology in ~12 minutes on a laptop.
+Here we describe a screen designed to answer all of these in a single pipeline (**Fig. 1**). We use only free public data, validate the mechanism layer against 19 known repurposing successes, and ship the candidate per-hypothesis as a PDF brief identifying a regional Key Opinion Leader and proposing a tractable collaboration model. The screen scales to all of approved pharma × all of disease ontology in ~12 minutes on a laptop.
+
+![**Pipeline architecture.** Public data sources (top) feed canonical adapters; mechanism scoring (noisy-OR over drug-target × target-disease) anchors the screen; six enrichment layers (novelty, direction, tissue, phylo, pathway, severity) refine the score; opportunity is computed and substance-grouping collapses formulations up to ChEMBL's active-ingredient parent; five external enrichment layers (literature prior, market sizing, FDA Orange Book IP, KOL finder, combination-therapy companion finder) supplement the ranked output. Two operational outputs: a 36-column CSV and one-page PDF deal memos per top hypothesis.](figures/fig1_pipeline_architecture.png){ width=100% }
+
 
 ## Results
 
@@ -45,7 +48,10 @@ A single end-to-end run on Open Targets release 24.06 produced 200,000 ranked ca
 
 ### Backtest validation: 16 of 19 known repurposing successes recovered
 
-To measure whether the screen's mechanism layer actually surfaces real repurposing connections, we curated 19 known successes (Table 1) and computed `mech_support` — the noisy-OR over drug-target × target-disease contributions^19^ — exactly as the screen does, but without subtracting novelty (since the repurposed indications are now on-label and would otherwise be filtered). At a threshold of 0.3, sixteen of nineteen cases scored HIT (Table 1, **84% recovery rate**), including sildenafil → pulmonary arterial hypertension (0.61, via PDE5A), thalidomide → multiple myeloma (0.98, via CRBN), methotrexate → rheumatoid arthritis (0.85), tofacitinib → ulcerative colitis (0.98, via JAK1/2/3), and naltrexone → alcohol dependence (1.00, via OPRM1/OPRK1).
+To measure whether the screen's mechanism layer actually surfaces real repurposing connections, we curated 19 known successes (Table 1) and computed `mech_support` — the noisy-OR over drug-target × target-disease contributions^19^ — exactly as the screen does, but without subtracting novelty (since the repurposed indications are now on-label and would otherwise be filtered). At a threshold of 0.3, sixteen of nineteen cases scored HIT (**Fig. 2**, **84% recovery rate**), including sildenafil → pulmonary arterial hypertension (0.61, via PDE5A), thalidomide → multiple myeloma (0.98, via CRBN), methotrexate → rheumatoid arthritis (0.85), tofacitinib → ulcerative colitis (0.98, via JAK1/2/3), and naltrexone → alcohol dependence (1.00, via OPRM1/OPRK1).
+
+![**Backtest validation against known repurposing successes.** Per-case mechanism-support scores computed exactly as the screen computes them, but without subtracting novelty so that repurposed (now on-label) indications are not filtered. 16 of 19 cases (84%) scored HIT at the 0.30 threshold. The three failures (red / grey) are all Open Targets data-coverage gaps for rare or peripheral indications, not pipeline-logic errors.](figures/fig2_backtest_validation.png){ width=85% }
+
 
 The three failures all traced to Open Targets data-coverage gaps: minoxidil → alopecia (K-ATP follicle effect not curated as a disease association), propranolol → capillary infantile haemangioma (rare condition with weak target-disease signal), and acetazolamide → idiopathic intracranial hypertension (disease absent from OT entirely). The failures are not pipeline-logic errors but resource-coverage limits, which lift automatically with each OT release.
 
@@ -55,7 +61,7 @@ The validation script flagged one case as a "surprising hit": metformin → poly
 
 The combination-therapy companion finder evaluates, for each top-N primary hypothesis, candidate companion substances whose direct targets bridge strong disease targets the primary does not hit. Synergy is measured as `combo_mech – mech_primary` (the noisy-OR over the union of contributions, minus the primary's coverage alone), with a target-overlap filter to reject same-class redundancy.
 
-Strikingly, the screen rediscovered the BRAF + MEK inhibitor doublet — currently standard-of-care for BRAF V600E metastatic melanoma^22,23^ — from first principles in cardiofaciocutaneous syndrome, a developmental RASopathy driven by germline pathway-activating mutations in BRAF, MAP2K1, KRAS, or NRAS^24^. All three BRAF inhibitors in the approved-drug set (dabrafenib, vemurafenib, encorafenib) paired with binimetinib (and to a lesser extent cobimetinib) at synergy 0.15; the KRAS analogues sotorasib and adagrasib paired with binimetinib at synergy 0.17 (Table 2). Treating CFC syndrome (~1 in 270,000 births, an orphan indication) with the pathway-targeting agents already in clinical use for melanoma is a research-active hypothesis^25^, and the screen identified it without prior programming of any oncology-developmental cross-reference.
+Strikingly, the screen rediscovered the BRAF + MEK inhibitor doublet — currently standard-of-care for BRAF V600E metastatic melanoma^22,23^ — from first principles in cardiofaciocutaneous syndrome, a developmental RASopathy driven by germline pathway-activating mutations in BRAF, MAP2K1, KRAS, or NRAS^24^. All three BRAF inhibitors in the approved-drug set (dabrafenib, vemurafenib, encorafenib) paired with binimetinib (and to a lesser extent cobimetinib) at synergy 0.15; the KRAS analogues sotorasib and adagrasib paired with binimetinib at synergy 0.17 (**Fig. 4a**, Table 2). Treating CFC syndrome (~1 in 270,000 births, an orphan indication) with the pathway-targeting agents already in clinical use for melanoma is a research-active hypothesis^25^, and the screen identified it without prior programming of any oncology-developmental cross-reference.
 
 Other notable combinations the screen surfaced (Table 2):
 - **Bromazepam + orphenadrine → developmental and epileptic encephalopathy** (benzodiazepine GABA-A potentiation + NMDA antagonism, synergy 0.48 — the highest in the top 30);
@@ -63,17 +69,23 @@ Other notable combinations the screen surfaced (Table 2):
 - **Pinacidil/minoxidil + vernakalant → familial atrial fibrillation** (K-ATP opener + atrial-specific K⁺ blocker);
 - **Setmelanotide/bremelanotide + metformin → type 2 diabetes mellitus** (MC4R agonist + complex-I inhibitor; bridge target NDUFAB1 — the same proximal mechanism the metformin/PCOS backtest case revealed).
 
-Of 200 primary hypotheses in the combination-finder pass, 61 received at least one companion satisfying the synergy threshold and target-overlap filter.
+Of 200 primary hypotheses in the combination-finder pass, 61 received at least one companion satisfying the synergy threshold and target-overlap filter (**Fig. 4b**).
+
+![**De novo discovery of combination therapies.** **a**, Network view of the BRAF + MEK rediscovery in cardiofaciocutaneous syndrome. All three approved BRAF inhibitors (dabrafenib, vemurafenib, encorafenib) and both approved KRAS-G12C inhibitors (sotorasib, adagrasib) pair with binimetinib or cobimetinib via the MAP2K1/MAP2K2 bridge target — the same pathway-based combination that defines standard-of-care for BRAF V600E metastatic melanoma, surfaced here in a developmental RASopathy without any prior cross-reference. **b**, Top combination-therapy synergies in the top 200 primary hypotheses, by `combo_mech_support − primary_mech_support`. The Setmelanotide + Metformin bridge via NDUFAB1 mirrors the surprising-hit case the backtest surfaced for metformin's actual mechanism of action.](figures/fig4_combinations.png){ width=100% }
+
 
 ### Severity-aware damping eliminates the "receptor LoF + agonist" trap
 
 Direct-target mechanism scoring produces a recurring failure mode in monogenic disorders: when the disease is caused by loss-of-function of a receptor, an agonist for that receptor cannot rescue the broken protein. Without correction, an early version of the screen had the insulin formulations clustered at ranks 11–30 of the full output paired with "hyperinsulinism due to INSR deficiency", and G-CSF analogues paired with "autosomal recessive severe congenital neutropenia due to CSF3R deficiency" — both biologically futile.
 
-We implemented a narrow, conservative heuristic: when a gene named in the disease is also a direct target of the drug (`disease_gene_match`), the disease name contains severity language ("deficiency", "complete absence", "Donohue syndrome", "Rabson-Mendenhall"^26^), AND the drug's action class is agonistic, the hypothesis is flagged `severe_loF_agonist` and its opportunity is reduced by 70%. The cluster (32 hypotheses) was pushed below rank 100 — effectively out of the screen — while adjacent partial-LoF rescuable cases were preserved: thiazolidinediones for PPARG-related familial partial lipodystrophy (FPLD3), where TZD agonism rescues residual receptor activity^27^, remained at rank 30; calcimimetics for familial hypocalciuric hypercalcemia 1, where partial CaSR function persists^28^, remained at ranks 19–20. The discrimination rests entirely on the disease name's severity language — INSR-deficiency hyperinsulinism implies a severe-LoF state, "partial lipodystrophy" or "hypocalciuric" does not.
+We implemented a narrow, conservative heuristic: when a gene named in the disease is also a direct target of the drug (`disease_gene_match`), the disease name contains severity language ("deficiency", "complete absence", "Donohue syndrome", "Rabson-Mendenhall"^26^), AND the drug's action class is agonistic, the hypothesis is flagged `severe_loF_agonist` and its opportunity is reduced by 70%. The cluster (32 hypotheses) was pushed below rank 100 — effectively out of the screen (**Fig. 3a**) — while adjacent partial-LoF rescuable cases were preserved: thiazolidinediones for PPARG-related familial partial lipodystrophy (FPLD3), where TZD agonism rescues residual receptor activity^27^, remained at rank 30; calcimimetics for familial hypocalciuric hypercalcemia 1, where partial CaSR function persists^28^, remained at ranks 19–20. The discrimination rests entirely on the disease name's severity language — INSR-deficiency hyperinsulinism implies a severe-LoF state, "partial lipodystrophy" or "hypocalciuric" does not.
 
 ### Filtering noisy direction signal from model-organism sources
 
-A second class of failure mode arose from how Open Targets aggregates direction-of-effect evidence. Of approximately 1.02 million direction-informative rows in the OT evidence parquet, ~1.14 million originate from IMPC (mouse-knockout phenotyping via PhenoDigm), versus only ~166,000 from the human-genetics direction sources (ot_genetics_portal) and ~282,000 from ClinVar (eva). IMPC's `variantEffect = LoF / directionOnTrait = risk` calls — appropriate for "what happens when you delete the mouse gene" — frequently flip the inferred therapeutic direction for human disorders whose mechanism differs from a complete knockout. For EPOR + primary familial polycythemia (a *gain*-of-function truncation that removes the receptor's negative-regulatory domain^29^), IMPC contributed 16 LoF/risk rows; the aggregated direction signal recommended an EPOR *agonist* — the opposite of the correct therapy. After filtering the direction adapter to seven curated human-genetics sources (`ot_genetics_portal`, `gene_burden`, `eva`, `gene2phenotype`, `clingen`, `genomics_england`, `orphanet`), the EPO → polycythemia cluster fell 275 ranks (22–30 → 297–301), and the direction CSV more broadly contracted from ~1.02M rows to 113,339 with a balanced direction split (64,294 +1 vs 49,045 −1, versus the previous ~95% skew toward +1).
+A second class of failure mode arose from how Open Targets aggregates direction-of-effect evidence. Of approximately 1.02 million direction-informative rows in the OT evidence parquet, ~1.14 million originate from IMPC (mouse-knockout phenotyping via PhenoDigm), versus only ~166,000 from the human-genetics direction sources (ot_genetics_portal) and ~282,000 from ClinVar (eva) (**Fig. 3b**). IMPC's `variantEffect = LoF / directionOnTrait = risk` calls — appropriate for "what happens when you delete the mouse gene" — frequently flip the inferred therapeutic direction for human disorders whose mechanism differs from a complete knockout. For EPOR + primary familial polycythemia (a *gain*-of-function truncation that removes the receptor's negative-regulatory domain^29^), IMPC contributed 16 LoF/risk rows; the aggregated direction signal recommended an EPOR *agonist* — the opposite of the correct therapy. After filtering the direction adapter to seven curated human-genetics sources (`ot_genetics_portal`, `gene_burden`, `eva`, `gene2phenotype`, `clingen`, `genomics_england`, `orphanet`), the EPO → polycythemia cluster fell 275 ranks (22–30 → 297–301), and the direction CSV more broadly contracted from ~1.02M rows to 113,339 with a balanced direction split (64,294 +1 vs 49,045 −1, versus the previous ~95% skew toward +1).
+
+![**Engineering choices that mattered.** **a**, Severity heuristic relocates all 32 'receptor LoF + agonist' hypotheses from their natural ranks (most of them clustering at ranks 10–30) to ranks below 100 (most below 30,000). The 0.70 damping factor was chosen to ensure no flagged hypothesis surfaces in a typical fund-screen review window (top 100). **b**, Direction-of-effect signal composition before and after the IMPC-source filter. IMPC mouse-knockout evidence (red) dominates the raw OT direction signal by an order of magnitude but is inappropriate for inferring human therapeutic direction in monogenic disorders; restricting to curated human-genetics sources (green) contracts the CSV from ~1.02M rows to 113k and rebalances the +1/−1 direction split from ~95% positive to ~57% positive.](figures/fig3_engineering_choices.png){ width=100% }
+
 
 ### Operational outputs
 
@@ -128,6 +140,48 @@ The full pipeline source, configuration, curated CSVs, validation YAML, and this
 **Output.** 36-column CSV plus one-page A4 PDFs (ReportLab) per top hypothesis with identified KOL.
 
 **Compute.** Full run with all enrichment layers and literature pass: approximately 12 minutes on M-series Mac (16 GB RAM, ~50 GB free disk). DuckDB engine for the streaming target-disease join^36^.
+
+## Tables
+
+**Table 1.** Curated backtest set of 19 known successful drug-repurposing wins, with the original indication, the repurposed indication scored by the screen, the expected mechanism targets, the `mech_support` value computed by the screen, and the HIT / MISS / DATA-GAP status at threshold 0.30.
+
+| Drug | Original indication | Repurposed indication | Mechanism targets | `mech_support` | Status |
+|---|---|---|---|---:|:---:|
+| Sildenafil | erectile dysfunction | pulmonary arterial hypertension | PDE5A | 0.61 | HIT |
+| Minoxidil | hypertension | androgenetic alopecia | ABCC9, KCNJ11 | 0.00 | OT gap |
+| Thalidomide | morning sickness | multiple myeloma | CRBN | 0.98 | HIT |
+| Raloxifene | breast cancer prevention | osteoporosis | ESR1, ESR2 | 0.87 | HIT |
+| Propranolol | hypertension | infantile haemangioma | ADRB1, ADRB2 | 0.00 | OT gap |
+| Bupropion | major depressive disorder | nicotine dependence | SLC6A3, CHRNA3 | 0.99 | HIT |
+| Topiramate | epilepsy | migraine | SCN1A, CACNA1A | 1.00 | HIT |
+| Metformin | type 2 diabetes mellitus | polycystic ovary syndrome | NDUFA13, MT-ND4 (surprising)\* | 1.00 | HIT |
+| Methotrexate | cancer | rheumatoid arthritis | DHFR, ATIC | 0.85 | HIT |
+| Hydroxychloroquine | malaria | systemic lupus erythematosus | TLR7, TLR9 | 0.47 | HIT |
+| Spironolactone | hypertension | heart failure | NR3C2 | 0.59 | HIT |
+| Memantine | spasticity (older EU use) | Alzheimer disease | GRIN1, GRIN2A | 1.00 | HIT |
+| Tofacitinib | rheumatoid arthritis | ulcerative colitis | JAK1, JAK2, JAK3 | 0.98 | HIT |
+| Naltrexone | opioid use disorder | alcohol dependence | OPRM1, OPRK1 | 1.00 | HIT |
+| Duloxetine | major depressive disorder | fibromyalgia | SLC6A4, SLC6A2 | 0.85 | HIT |
+| Prazosin | hypertension | post-traumatic stress disorder | ADRA1A | 0.91 | HIT |
+| Acetazolamide | glaucoma | idiopathic intracranial hypertension | CA2, CA1 | -- | OT gap |
+| Aripiprazole | schizophrenia | major depressive disorder (adjunct) | DRD2, HTR1A | 1.00 | HIT |
+| Colchicine | gout | pericarditis | TUBB1, NLRP3 | 1.00 | HIT |
+| | | | **HIT rate** | **16/19** | **84%** |
+
+\*Surfaced via mitochondrial complex I genes (NDUFA13, MT-ND4, NDUFAB1, NDUFB8) rather than the AMPK subunits PRKAA1/PRKAA2 the literature most often invokes — consistent with metformin's actual proximal pharmacological mechanism.
+
+**Table 2.** Top combination-therapy synergies in the screen's top 200 primary hypotheses. Synergy is `combo_mech_support − primary_mech_support` under the noisy-OR formulation. Candidates with target overlap > 0.5 with the primary are rejected as same-class redundancy.
+
+| Primary substance | Companion | Disease | Bridge target | Synergy |
+|---|---|---|---|---:|
+| Bromazepam | Orphenadrine | developmental and epileptic encephalopathy | GRIN2D | 0.48 |
+| Setmelanotide / Bremelanotide | Metformin | type 2 diabetes mellitus | NDUFAB1 | 0.49 |
+| Pinacidil / Minoxidil | Vernakalant | familial atrial fibrillation | KCNJ5 | 0.26 |
+| Afamelanotide | Mequinol | oculocutaneous albinism type 6 | TYR | 0.33 |
+| Angiotensin II | Aliskiren | renal tubular dysgenesis | REN | 0.21 |
+| Sotorasib / Adagrasib | Binimetinib | cardiofaciocutaneous syndrome | MAP2K2 | 0.17 |
+| Dabrafenib / Vemurafenib / Encorafenib | Binimetinib | cardiofaciocutaneous syndrome | MAP2K2 | 0.15 |
+| Follitropin (alfa / beta / delta) | Esterified estrogens | 46,XX gonadal dysgenesis | ESR2 | 0.11 |
 
 ## Acknowledgements
 
