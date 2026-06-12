@@ -227,6 +227,51 @@ def opentargets_target_direction(evidence_parquet_dir: str, gene_map_csv: str,
     return out[["target_symbol", "efo_id", "therapeutic_direction", "evidence"]]
 
 
+def opentargets_target_pathways(targets_parquet_dir: str,
+                                gene_map_csv: str) -> pd.DataFrame:
+    """Per gene: target_symbol, pathway_id, pathway_name, top_level.
+
+    Reads OT's `targets` parquet, which already integrates Reactome:
+    each gene row has a `pathways` field (list of struct
+    {pathwayId, pathway, topLevelTerm}). We unnest, dedup, and merge
+    on the ensembl_id -> target_symbol map. Top-level term is kept for
+    inspection (lets a downstream filter restrict to e.g. only
+    'Signal Transduction' if desired).
+    """
+    t = pd.read_parquet(parquet_paths_helper(targets_parquet_dir),
+                        columns=["id", "approvedSymbol", "pathways"])
+    t = t.rename(columns={"id": "ensembl_id"})
+    t = t[t["pathways"].notna()]
+    rows = []
+    for ensembl_id, syms, pws in zip(t["ensembl_id"], t["approvedSymbol"], t["pathways"]):
+        if pws is None or len(pws) == 0:
+            continue
+        for p in pws:
+            pid = p.get("pathwayId") if hasattr(p, "get") else None
+            if not pid:
+                continue
+            rows.append({
+                "ensembl_id": ensembl_id,
+                "target_symbol": syms,
+                "pathway_id": pid,
+                "pathway_name": p.get("pathway", ""),
+                "top_level": p.get("topLevelTerm", ""),
+            })
+    flat = pd.DataFrame(rows).drop_duplicates(["ensembl_id", "pathway_id"])
+    # Merge with the gene map to keep symbol consistency across the pipeline
+    genes = pd.read_csv(gene_map_csv)
+    merged = flat.merge(genes, on="ensembl_id", how="inner")
+    # The merge column collision: keep the gene_map's target_symbol
+    if "target_symbol_y" in merged.columns:
+        merged = merged.rename(columns={"target_symbol_y": "target_symbol"})
+        merged = merged.drop(columns=[c for c in merged.columns
+                                       if c.endswith("_x") or c == "ensembl_id"])
+    else:
+        merged = merged.drop(columns=["ensembl_id"])
+    return merged[["target_symbol", "pathway_id", "pathway_name", "top_level"]] \
+        .drop_duplicates(["target_symbol", "pathway_id"]).reset_index(drop=True)
+
+
 def opentargets_disease_synonyms(diseases_parquet_dir: str,
                                  max_synonyms: int = 8) -> pd.DataFrame:
     """Per disease: efo_id, disease_synonyms (semicolon-separated exact synonyms).
