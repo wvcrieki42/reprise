@@ -109,6 +109,73 @@ def test_target_class_rollup_excludes_string_neighbours():
     assert (out.drug_id == "DRUG_B").sum() == 1
 
 
+def test_target_class_rollup_selective_inherits_from_broad():
+    """A SELECTIVE drug (single target) inherits from a BROAD drug whose target
+    set is a superset. Silodosin (ADRA1A-only) inherits doxazosin's (pan-ADRA1)
+    hypertension indication so the screen doesn't surface 'use alpha-1 blocker
+    for HTN' as a novel hypothesis."""
+    indications = pd.DataFrame([
+        {"drug_id": "DOX_BROAD", "efo_id": "EFO_HTN",
+         "indication_name": "hypertension"},
+    ])
+    drug_targets = pd.DataFrame([
+        # Selective: only ADRA1A
+        {"drug_id": "SIL_SELECTIVE", "target_symbol": "ADRA1A",
+         "action_type": "ANTAGONIST", "is_direct": True},
+        # Broad: ADRA1A + ADRA1B + ADRA1D
+        {"drug_id": "DOX_BROAD", "target_symbol": "ADRA1A",
+         "action_type": "ANTAGONIST", "is_direct": True},
+        {"drug_id": "DOX_BROAD", "target_symbol": "ADRA1B",
+         "action_type": "ANTAGONIST", "is_direct": True},
+        {"drug_id": "DOX_BROAD", "target_symbol": "ADRA1D",
+         "action_type": "ANTAGONIST", "is_direct": True},
+    ])
+    out = steps.expand_indications_by_target_class(indications, drug_targets, _cfg())
+    sil = out[out.drug_id == "SIL_SELECTIVE"]
+    assert set(sil["efo_id"]) == {"EFO_HTN"}, \
+        "selective drug must inherit broad drug's indication when its class is a subset"
+
+
+def test_target_class_rollup_broad_does_not_inherit_from_selective():
+    """The reverse: a BROADER drug does NOT inherit from a more selective one,
+    because the selective drug's class is not a superset of the broad drug's."""
+    indications = pd.DataFrame([
+        {"drug_id": "SIL_SELECTIVE", "efo_id": "EFO_BPH",
+         "indication_name": "benign prostatic hyperplasia"},
+    ])
+    drug_targets = pd.DataFrame([
+        {"drug_id": "SIL_SELECTIVE", "target_symbol": "ADRA1A",
+         "action_type": "ANTAGONIST", "is_direct": True},
+        {"drug_id": "DOX_BROAD", "target_symbol": "ADRA1A",
+         "action_type": "ANTAGONIST", "is_direct": True},
+        {"drug_id": "DOX_BROAD", "target_symbol": "ADRA1B",
+         "action_type": "ANTAGONIST", "is_direct": True},
+    ])
+    out = steps.expand_indications_by_target_class(indications, drug_targets, _cfg())
+    # SIL has its own indication; DOX must NOT inherit BPH via the rollup
+    assert (out.drug_id == "DOX_BROAD").sum() == 0
+
+
+def test_target_class_rollup_unrelated_classes_dont_pool():
+    """Two classes that aren't subset-related don't share indications."""
+    indications = pd.DataFrame([
+        {"drug_id": "DRUG_A", "efo_id": "EFO_X", "indication_name": "x"},
+        {"drug_id": "DRUG_B", "efo_id": "EFO_Y", "indication_name": "y"},
+    ])
+    drug_targets = pd.DataFrame([
+        # Different targets entirely
+        {"drug_id": "DRUG_A", "target_symbol": "EGFR",
+         "action_type": "INHIBITOR", "is_direct": True},
+        {"drug_id": "DRUG_B", "target_symbol": "BRAF",
+         "action_type": "INHIBITOR", "is_direct": True},
+    ])
+    out = steps.expand_indications_by_target_class(indications, drug_targets, _cfg())
+    a = out[out.drug_id == "DRUG_A"]
+    b = out[out.drug_id == "DRUG_B"]
+    assert set(a["efo_id"]) == {"EFO_X"}
+    assert set(b["efo_id"]) == {"EFO_Y"}
+
+
 def test_target_class_rollup_can_be_disabled():
     """When disabled, indications pass through untouched."""
     indications = pd.DataFrame([

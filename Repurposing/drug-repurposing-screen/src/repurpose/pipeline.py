@@ -18,6 +18,7 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "modality", "efo_id", "disease_na
                "direction_factor", "direction_status",
                "tissue_factor", "tissue_status", "tissue_evidence",
                "phylo_factor", "phylo_score", "phylo_n_models", "phylo_sources",
+               "disease_gene_match",
                "pubmed_count", "europepmc_count", "trial_count", "patent_count",
                "investigation_prior",
                "us_patients", "us_prevalence_per_100k", "is_orphan",
@@ -179,6 +180,15 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
         hyp["n_drug_targets"] = hyp["n_drug_targets"].fillna(1).astype(int)
         ranked = steps.score(hyp, cfg)
 
+    # Flag (drug, disease) pairs where one of the drug's direct targets is named
+    # in the disease itself -- 'drug targets the broken receptor' class. Always
+    # on, inspection-only (no automatic score change).
+    direct_dt = prep["drug_targets"][prep["drug_targets"].get("is_direct", True) == True] \
+        if "is_direct" in prep["drug_targets"].columns else prep["drug_targets"]
+    concord = steps.flag_disease_gene_concordance(
+        ranked, direct_dt, prep["gene_info"])
+    ranked = ranked.merge(concord, on=["drug_id", "efo_id"], how="left")
+    ranked["disease_gene_match"] = ranked["disease_gene_match"].fillna("")
     ranked = _maybe_literature_pass(ranked, cfg, prep, log)
     ranked = _maybe_market_pass(ranked, cfg, log)
     ranked = _finalize(ranked, cfg, prep)

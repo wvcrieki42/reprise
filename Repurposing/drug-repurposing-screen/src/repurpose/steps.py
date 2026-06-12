@@ -5,6 +5,7 @@ mechanistic-support aggregation and the directionality model are computed from
 it, so the two engines (pandas / duckdb) stay consistent.
 """
 from __future__ import annotations
+import re
 import numpy as np
 import pandas as pd
 
@@ -291,21 +292,25 @@ def add_phylo_evidence(edges: pd.DataFrame, phylo: pd.DataFrame,
 def expand_indications_by_target_class(
     indications: pd.DataFrame, drug_targets: pd.DataFrame, cfg: Config,
 ) -> pd.DataFrame:
-    """Augment indications so all drugs with the same direct (target,action) set share them.
+    """Augment indications by pooling them across drugs in the same target class.
 
-    ChEMBL annotates indications on individual drug entries, but many
-    proteins / biologics have one ChEMBL row per formulation
-    (INSULIN ASPART vs INSULIN ASPART PROTAMINE RECOMBINANT) and the
-    indication only lives on one of them. Without this step the
-    formulation gets flagged "novel" for its on-label disease and
-    pollutes the top of the screen.
+    ChEMBL annotates indications on individual drug entries, but many drugs
+    that ARE in the same pharmacological class get patchy coverage:
+      * formulation variants (INSULIN ASPART vs INSULIN ASPART PROTAMINE
+        RECOMBINANT) -- same exact targets, different ChEMBL rows
+      * selective vs broad-spectrum members of a class (silodosin is
+        ADRA1A-selective; doxazosin is pan-ADRA1) -- silodosin's class is
+        a SUBSET of doxazosin's, so silodosin should inherit doxazosin's
+        hypertension indication (we want to suppress 'use alpha-1 blocker
+        for HTN' as a 'novel' hypothesis -- it's textbook).
 
-    Roll-up rule (intentionally narrow): two drugs share indications IFF
-    they have IDENTICAL frozensets of (direct target_symbol, action_type)
-    pairs. STRING neighbours are excluded -- they aren't the drug's real
-    targets. With this rule a kinase inhibitor doesn't inherit from every
-    other kinase inhibitor (target sets differ), but every insulin
-    inherits from every other insulin (all are INSR-AGONIST).
+    Roll-up rule: drug A inherits drug B's indications iff A's frozenset
+    of (direct target_symbol, action_type) pairs is a SUBSET of B's.
+    Equality is the trivial case; strict-subset is the selective-inherits-
+    from-broad case. STRING neighbours are excluded so they don't inflate
+    sharing. A kinase inhibitor with a unique target set still doesn't
+    inherit from a different kinase inhibitor (neither is a subset of
+    the other).
     """
     if not bool(cfg.get("novelty", "expand_by_target_class", default=True)):
         return indications
@@ -318,14 +323,34 @@ def expand_indications_by_target_class(
         return indications
     dt["pair"] = list(zip(dt["target_symbol"].fillna(""),
                           dt["action_type"].fillna("")))
-    class_key = (dt.groupby("drug_id")["pair"]
-                   .apply(lambda s: tuple(sorted(set(s))))
-                   .rename("class_key").reset_index())
-    ind_with_class = indications.merge(class_key, on="drug_id", how="inner")
-    class_inds = (ind_with_class[["class_key", "efo_id", "indication_name"]]
-                    .drop_duplicates())
-    rolled = class_key.merge(class_inds, on="class_key", how="inner")[
-        ["drug_id", "efo_id", "indication_name"]]
+    drug_class = (dt.groupby("drug_id")["pair"]
+                    .apply(lambda s: frozenset(s)).rename("class_set").reset_index())
+
+    # Indications grouped by the contributor drug's class set (set of efo_ids).
+    ind_with_class = indications.merge(drug_class, on="drug_id", how="inner")
+    class_to_efos: dict[frozenset, set[str]] = {}
+    for cls, efo in zip(ind_with_class["class_set"], ind_with_class["efo_id"]):
+        class_to_efos.setdefault(cls, set()).add(efo)
+
+    # For each unique drug class C, pool indications from every class C' with C ⊆ C'.
+    contributor_classes = list(class_to_efos.keys())
+    pooled_by_class: dict[frozenset, set[str]] = {}
+    for cls in set(drug_class["class_set"]):
+        pooled: set[str] = set()
+        for c2 in contributor_classes:
+            if cls <= c2:                      # equality handled here too
+                pooled.update(class_to_efos[c2])
+        if pooled:
+            pooled_by_class[cls] = pooled
+
+    # Distribute back to drugs.
+    rolled_rows = [
+        {"drug_id": row.drug_id, "efo_id": efo, "indication_name": ""}
+        for row in drug_class.itertuples(index=False)
+        for efo in pooled_by_class.get(row.class_set, ())
+    ]
+    rolled = (pd.DataFrame(rolled_rows) if rolled_rows
+              else pd.DataFrame(columns=["drug_id", "efo_id", "indication_name"]))
     combined = pd.concat([indications, rolled], ignore_index=True).drop_duplicates(
         subset=["drug_id", "efo_id"], keep="first").reset_index(drop=True)
     return combined
@@ -466,6 +491,84 @@ def add_literature_pass(ranked: pd.DataFrame, lit_client, cfg: Config) -> pd.Dat
         if "rank" in out.columns:
             out["rank"] = out.index + 1
     return out
+
+
+# ----------------------------------------------------------------------
+# Step 5d - flag (drug, disease) pairs where the drug targets a gene named in the disease
+# ----------------------------------------------------------------------
+_GENE_TOKEN_RE = re.compile(r"\b([A-Z][A-Z0-9]{1,6})\b")
+_RECEPTOR_SUFFIX_RE = re.compile(r"\b([A-Z][A-Z0-9]{1,6})\s+receptor\b")
+
+
+def _disease_gene_tokens(name: str, gene_universe: set[str]) -> set[str]:
+    """Extract gene-like uppercase tokens from a disease name, restricted to
+    symbols that actually exist in the gene universe. Also derives 'XR' from
+    'X receptor' (TSH receptor -> TSHR, EPO receptor -> EPOR) to catch the
+    common naming convention where the ligand is named but the receptor is
+    the actual target.
+    """
+    if not isinstance(name, str) or not name:
+        return set()
+    tokens = set(_GENE_TOKEN_RE.findall(name))
+    for m in _RECEPTOR_SUFFIX_RE.finditer(name):
+        tokens.add(m.group(1) + "R")
+    return tokens & gene_universe
+
+
+def flag_disease_gene_concordance(hypotheses: pd.DataFrame,
+                                  drug_targets: pd.DataFrame,
+                                  gene_info: pd.DataFrame) -> pd.DataFrame:
+    """Per (drug, disease): which of the drug's direct targets are named in the disease.
+
+    Surfaces the whole class of 'drug targets the disease gene directly' hits:
+      * INSULIN -> 'hyperinsulinism due to INSR deficiency'         (severe LoF -- agonist futile)
+      * THYROTROPIN -> 'hypothyroidism due to TSH receptor mutations' (severe LoF -- agonist futile)
+      * PIOGLITAZONE -> 'PPARG-related familial partial lipodystrophy' (partial LoF -- legit)
+      * CINACALCET -> 'familial hypocalciuric hypercalcemia 1'        (CASR; need full name to match)
+
+    Inspection-only: emits a `disease_gene_match` column (comma-separated
+    symbols, empty when none). Whether the match means the drug is wrong
+    (severe receptor LoF -> agonists can't help) or right (partial LoF
+    rescuable by agonists) depends on disease-specific severity -- defer
+    to human judgment rather than auto-damp.
+    """
+    out_cols = ["drug_id", "efo_id", "disease_gene_match"]
+    if hypotheses.empty:
+        return pd.DataFrame(columns=out_cols)
+
+    gene_universe: set[str] = set()
+    if gene_info is not None and not gene_info.empty and "symbol" in gene_info.columns:
+        gene_universe = set(gene_info["symbol"].dropna().astype(str))
+    if drug_targets is not None and not drug_targets.empty:
+        gene_universe |= set(drug_targets["target_symbol"].dropna().astype(str))
+    if not gene_universe:
+        return hypotheses[["drug_id", "efo_id"]].assign(disease_gene_match="")
+
+    # Per drug -> set of direct target symbols.
+    dt = drug_targets.copy()
+    if "is_direct" in dt.columns:
+        dt = dt[dt["is_direct"].fillna(True)]
+    drug_to_targets = (dt.dropna(subset=["target_symbol"])
+                         .groupby("drug_id")["target_symbol"]
+                         .apply(lambda s: set(s.astype(str))).to_dict())
+
+    # Per disease name -> set of gene-symbol tokens (cache by name; many drugs share).
+    unique_names = hypotheses[["efo_id", "disease_name"]].drop_duplicates()
+    disease_tokens = {
+        efo_id: _disease_gene_tokens(name, gene_universe)
+        for efo_id, name in zip(unique_names["efo_id"], unique_names["disease_name"])
+    }
+
+    matches = []
+    for drug_id, efo_id in zip(hypotheses["drug_id"], hypotheses["efo_id"]):
+        toks = disease_tokens.get(efo_id, set())
+        if not toks:
+            matches.append("")
+            continue
+        targets = drug_to_targets.get(drug_id, set())
+        hit = sorted(toks & targets)
+        matches.append(",".join(hit))
+    return hypotheses[["drug_id", "efo_id"]].assign(disease_gene_match=matches)
 
 
 # ----------------------------------------------------------------------
