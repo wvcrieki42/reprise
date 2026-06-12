@@ -336,20 +336,29 @@ def add_literature_pass(ranked: pd.DataFrame, lit_client, cfg: Config) -> pd.Dat
     """
     top_n = int(cfg.get("literature", "top_n", default=5000))
     w_inv = float(cfg.get("scoring", "w_investigation", default=0.5))
-    lit_cols = ["pubmed_count", "europepmc_count", "trial_count", "investigation_prior"]
+    count_cols = ["pubmed_count", "europepmc_count", "trial_count", "patent_count"]
     out = ranked.copy()
     if out.empty or top_n <= 0:
-        for c in lit_cols[:3]:
+        for c in count_cols:
             out[c] = pd.array([pd.NA] * len(out), dtype="Int64")
         out["investigation_prior"] = float("nan")
         return out
 
     head = out.head(top_n)
-    uniq = (head[["lead_target", "efo_id", "disease_name"]]
+    uniq_cols = ["lead_target", "efo_id", "disease_name"]
+    for c in ("target_synonyms", "disease_synonyms"):
+        if c in head.columns:
+            uniq_cols.append(c)
+    uniq = (head[uniq_cols]
             .rename(columns={"lead_target": "target_symbol"})
             .dropna(subset=["target_symbol", "disease_name"])
-            .drop_duplicates())
+            .drop_duplicates(subset=["target_symbol", "efo_id", "disease_name"]))
     prior = lit_client.score_pairs(uniq).rename(columns={"target_symbol": "lead_target"})
+    # Drop the synonym helper columns from the merge result -- they were query
+    # aids; the only thing we keep is the count columns + investigation_prior.
+    drop_helpers = [c for c in ("target_synonyms", "disease_synonyms") if c in prior.columns]
+    if drop_helpers:
+        prior = prior.drop(columns=drop_helpers)
     out = out.merge(prior, on=["lead_target", "efo_id", "disease_name"], how="left")
     if w_inv > 0:
         damp = (1.0 - w_inv * out["investigation_prior"].fillna(0.0).clip(0, 1)).clip(0, 1)

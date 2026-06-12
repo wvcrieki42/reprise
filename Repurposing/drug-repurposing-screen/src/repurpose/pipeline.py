@@ -17,13 +17,20 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "modality", "efo_id", "disease_na
                "mechanistic_support", "novelty", "novelty_status",
                "direction_factor", "direction_status",
                "tissue_factor", "tissue_status", "tissue_evidence",
-               "pubmed_count", "europepmc_count", "trial_count", "investigation_prior",
+               "pubmed_count", "europepmc_count", "trial_count", "patent_count",
+               "investigation_prior",
                "n_targets", "n_drug_targets", "opportunity",
                "evidence_targets", "data_version"]
 
 
-def _maybe_literature_pass(ranked: pd.DataFrame, cfg: Config, log) -> pd.DataFrame:
-    """Construct a LiteraturePriorClient from config and run the two-pass step."""
+def _maybe_literature_pass(ranked: pd.DataFrame, cfg: Config, prep: dict, log) -> pd.DataFrame:
+    """Construct a LiteraturePriorClient from config and run the two-pass step.
+
+    Enriches the top-N ranked hypotheses with a `target_synonyms` column built
+    from `gene_info.gene_name` so the PubMed / Europe PMC queries OR the full
+    gene name in alongside the symbol -- materially better recall for genes
+    with descriptive names ("EGFR" OR "epidermal growth factor receptor").
+    """
     if not cfg.get("literature", "enabled", default=False):
         return ranked
     from .sources.literature import LiteraturePriorClient
@@ -31,14 +38,25 @@ def _maybe_literature_pass(ranked: pd.DataFrame, cfg: Config, log) -> pd.DataFra
     lit = LiteraturePriorClient(
         cache_dir=cache_dir,
         ncbi_api_key=cfg.get("literature", "ncbi_api_key", default=None),
+        lens_api_token=cfg.get("literature", "lens_api_token", default=None),
         enable_pubmed=cfg.get("literature", "enable_pubmed", default=True),
         enable_europepmc=cfg.get("literature", "enable_europepmc", default=True),
         enable_clinicaltrials=cfg.get("literature", "enable_clinicaltrials", default=True),
+        enable_lens=cfg.get("literature", "enable_lens", default=False),
+        max_synonyms_target=cfg.get("literature", "max_synonyms_target", default=4),
+        max_synonyms_disease=cfg.get("literature", "max_synonyms_disease", default=4),
         max_workers=cfg.get("literature", "max_workers", default=4),
     )
     n_query = min(int(cfg.get("literature", "top_n", default=5000)), len(ranked))
     log(f"literature pass: querying top {n_query} of {len(ranked)} hypotheses "
         f"(cache_dir={cache_dir})")
+    # Attach gene_name as a target synonym so the client's OR expansion picks it up.
+    gi = prep.get("gene_info")
+    if gi is not None and {"symbol", "gene_name"}.issubset(gi.columns):
+        syn = gi[["symbol", "gene_name"]].dropna()
+        syn = syn[syn["gene_name"].str.strip() != ""].rename(
+            columns={"symbol": "lead_target", "gene_name": "target_synonyms"})
+        ranked = ranked.merge(syn, on="lead_target", how="left")
     return steps.add_literature_pass(ranked, lit, cfg)
 
 
@@ -115,7 +133,7 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
         hyp["n_drug_targets"] = hyp["n_drug_targets"].fillna(1).astype(int)
         ranked = steps.score(hyp, cfg)
 
-    ranked = _maybe_literature_pass(ranked, cfg, log)
+    ranked = _maybe_literature_pass(ranked, cfg, prep, log)
     ranked = _finalize(ranked, cfg, prep)
     log(f"final ranked hypotheses: {len(ranked)}")
     return ranked

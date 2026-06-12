@@ -45,16 +45,19 @@ DEFAULT_SATURATION = {
     "pubmed": 200,           # abstract-level co-mention (~rare disease ceiling)
     "europepmc": 500,        # full-text catches methods/results mentions
     "clinicaltrials": 10,    # a handful of trials = "this is actively investigated"
+    "lens": 50,              # patents are sparser; 50 = heavily protected combo
 }
 DEFAULT_WEIGHTS = {
     "pubmed": 1.0,
     "europepmc": 1.0,
     "clinicaltrials": 2.0,   # a trial is a stronger signal than a paper
+    "lens": 1.5,             # patents are a strong commercial-intent signal
 }
 DEFAULT_RATE_PER_SEC = {
     "pubmed": 3.0,           # NCBI: 3 req/s without API key, 10 with
     "europepmc": 5.0,
     "clinicaltrials": 5.0,
+    "lens": 2.0,             # Lens free tier ~5 req/s; stay polite
 }
 
 
@@ -134,9 +137,16 @@ class LiteraturePriorClient:
     """
     cache_dir: Path
     ncbi_api_key: str | None = None
+    lens_api_token: str | None = None      # https://www.lens.org/lens/user/subscriptions
     enable_pubmed: bool = True
     enable_europepmc: bool = True
     enable_clinicaltrials: bool = True
+    enable_lens: bool = False              # requires lens_api_token to actually fire
+    # Synonym expansion: cap how many alternate terms we OR into each side of the
+    # query. PubMed's expression length is finite and 4-each is a sensible cap
+    # for recall vs. precision.
+    max_synonyms_target: int = 4
+    max_synonyms_disease: int = 4
     saturation: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_SATURATION))
     weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     rate_per_sec: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_RATE_PER_SEC))
@@ -159,29 +169,45 @@ class LiteraturePriorClient:
     # ------------------------------------------------------------------
     def score_pairs(self, pairs: pd.DataFrame) -> pd.DataFrame:
         """Input columns: target_symbol, efo_id, disease_name.
+        Optional: target_synonyms, disease_synonyms (each a semicolon-separated
+        string; OR'd into the search query alongside the primary term).
         Output: same keys + pubmed_count, europepmc_count, trial_count,
-        investigation_prior (all per-source counts default to NaN if disabled).
+        patent_count, investigation_prior.
         """
         required = {"target_symbol", "efo_id", "disease_name"}
         missing = required - set(pairs.columns)
         if missing:
             raise KeyError(f"score_pairs: missing columns {missing}")
-        work = (pairs[["target_symbol", "efo_id", "disease_name"]]
-                .dropna()
-                .drop_duplicates()
+        keep_cols = ["target_symbol", "efo_id", "disease_name"]
+        for opt in ("target_synonyms", "disease_synonyms"):
+            if opt in pairs.columns:
+                keep_cols.append(opt)
+        work = (pairs[keep_cols]
+                .dropna(subset=["target_symbol", "efo_id", "disease_name"])
+                .drop_duplicates(subset=["target_symbol", "efo_id", "disease_name"])
                 .reset_index(drop=True))
         if work.empty:
             return work.assign(pubmed_count=pd.Series(dtype="Int64"),
                                europepmc_count=pd.Series(dtype="Int64"),
                                trial_count=pd.Series(dtype="Int64"),
+                               patent_count=pd.Series(dtype="Int64"),
                                investigation_prior=pd.Series(dtype="float"))
         sources_on = [s for s, on in (("pubmed", self.enable_pubmed),
                                       ("europepmc", self.enable_europepmc),
-                                      ("clinicaltrials", self.enable_clinicaltrials)) if on]
+                                      ("clinicaltrials", self.enable_clinicaltrials),
+                                      ("lens", self.enable_lens and bool(self.lens_api_token)))
+                      if on]
         counts = {s: [None] * len(work) for s in sources_on}
-        tasks = [(s, i, self._build_query(s, row.target_symbol, row.disease_name))
-                 for s in sources_on
-                 for i, row in work.iterrows()]
+        tasks = []
+        for s in sources_on:
+            for i, row in work.iterrows():
+                t_terms = self._term_list(row.get("target_symbol"),
+                                          row.get("target_synonyms", "") if "target_synonyms" in work.columns else "",
+                                          self.max_synonyms_target)
+                d_terms = self._term_list(row.get("disease_name"),
+                                          row.get("disease_synonyms", "") if "disease_synonyms" in work.columns else "",
+                                          self.max_synonyms_disease)
+                tasks.append((s, i, self._build_query(s, t_terms, d_terms)))
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             futures = {pool.submit(self._fetch_cached, s, q): (s, i)
                        for s, i, q in tasks}
@@ -195,6 +221,7 @@ class LiteraturePriorClient:
         out["pubmed_count"] = pd.array(counts.get("pubmed", [pd.NA] * len(work)), dtype="Int64")
         out["europepmc_count"] = pd.array(counts.get("europepmc", [pd.NA] * len(work)), dtype="Int64")
         out["trial_count"] = pd.array(counts.get("clinicaltrials", [pd.NA] * len(work)), dtype="Int64")
+        out["patent_count"] = pd.array(counts.get("lens", [pd.NA] * len(work)), dtype="Int64")
         out["investigation_prior"] = [
             self._aggregate({s: counts[s][i] for s in sources_on})
             for i in range(len(work))
@@ -205,17 +232,47 @@ class LiteraturePriorClient:
     # Query construction
     # ------------------------------------------------------------------
     @staticmethod
-    def _build_query(source: str, target: str, disease: str) -> str:
-        t = str(target).strip()
-        d = str(disease).strip()
+    def _term_list(primary, synonyms_field, cap: int) -> list[str]:
+        """Combine primary term + semicolon-separated synonyms, dedup, cap, sort.
+
+        Sorted so identical (term, synonym) inputs always produce the same query
+        string -- which means cache hits are stable across runs.
+        """
+        primary = "" if primary is None else str(primary).strip()
+        terms = [primary] if primary else []
+        if synonyms_field:
+            for s in str(synonyms_field).split(";"):
+                s = s.strip()
+                if s and s.lower() not in {t.lower() for t in terms}:
+                    terms.append(s)
+        # Keep primary first (most distinctive), then alphabetised aliases for stable caching.
+        if len(terms) > 1:
+            terms = terms[:1] + sorted(terms[1:], key=str.lower)
+        return terms[:cap]
+
+    @staticmethod
+    def _build_query(source: str, target_terms: list[str], disease_terms: list[str]) -> str:
+        if not target_terms or not disease_terms:
+            return ""
         if source == "pubmed":
             # tiab = title/abstract -- avoids false hits from author affiliations etc.
-            return f'("{t}"[tiab]) AND ("{d}"[tiab])'
+            t = " OR ".join(f'"{t}"[tiab]' for t in target_terms)
+            d = " OR ".join(f'"{d}"[tiab]' for d in disease_terms)
+            return f"({t}) AND ({d})"
         if source == "europepmc":
-            return f'(TITLE_ABS:"{t}" AND TITLE_ABS:"{d}")'
+            t = " OR ".join(f'TITLE_ABS:"{t}"' for t in target_terms)
+            d = " OR ".join(f'TITLE_ABS:"{d}"' for d in disease_terms)
+            return f"({t}) AND ({d})"
         if source == "clinicaltrials":
-            # ClinicalTrials.gov v2 free-text query; AND-combines automatically
-            return f'"{t}" AND "{d}"'
+            t = " OR ".join(f'"{t}"' for t in target_terms)
+            d = " OR ".join(f'"{d}"' for d in disease_terms)
+            return f"({t}) AND ({d})"
+        if source == "lens":
+            # Lens patent search accepts Lucene-style query_string syntax;
+            # we search title + abstract + claims for a commercial-intent signal.
+            t = " OR ".join(f'"{t}"' for t in target_terms)
+            d = " OR ".join(f'"{d}"' for d in disease_terms)
+            return f"({t}) AND ({d})"
         raise ValueError(f"unknown source: {source}")
 
     # ------------------------------------------------------------------
@@ -244,6 +301,8 @@ class LiteraturePriorClient:
             return self._fetch_europepmc(query)
         if source == "clinicaltrials":
             return self._fetch_clinicaltrials(query)
+        if source == "lens":
+            return self._fetch_lens(query)
         raise ValueError(f"unknown source: {source}")
 
     def _fetch_pubmed(self, query: str) -> int:
@@ -271,6 +330,35 @@ class LiteraturePriorClient:
             timeout=self.timeout)
         r.raise_for_status()
         return int(r.json().get("totalCount", 0))
+
+    def _fetch_lens(self, query: str) -> int:
+        """POST to Lens patent search API with a Lucene query_string body.
+
+        Counts patents whose title / abstract / claims co-mention the target
+        and disease terms. Requires a personal Lens API token (free tier
+        available; set via `lens_api_token`). Returns 0 if unauthorised so
+        the run keeps going.
+        """
+        if not self.lens_api_token:
+            return 0
+        body = {
+            "query": {
+                "query_string": {
+                    "query": query,
+                    "fields": ["title", "abstract", "claims"],
+                }
+            },
+            "size": 0,
+        }
+        r = self._session.post(
+            "https://api.lens.org/patent/search",
+            headers={
+                "Authorization": f"Bearer {self.lens_api_token}",
+                "Content-Type": "application/json",
+            },
+            json=body, timeout=self.timeout)
+        r.raise_for_status()
+        return int(r.json().get("total", 0))
 
     # ------------------------------------------------------------------
     # Aggregation

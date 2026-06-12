@@ -72,8 +72,12 @@ literature:
   enable_pubmed: true
   enable_europepmc: true
   enable_clinicaltrials: true
+  enable_lens: false           # patent search via api.lens.org (requires token)
+  max_synonyms_target: 4       # OR full gene name + aliases into target side
+  max_synonyms_disease: 4      # OR disease synonyms into disease side (when supplied)
   max_workers: 4
   # ncbi_api_key: "..."        # set to raise PubMed throughput from 3 to 10 req/s
+  # lens_api_token: "..."      # https://www.lens.org/lens/user/subscriptions (free tier)
 
 provenance:
   chembl_version: "34"

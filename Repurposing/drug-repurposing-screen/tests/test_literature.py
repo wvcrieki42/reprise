@@ -45,10 +45,11 @@ def test_aggregation_extremes(tmp_path):
     obs = out[out.target_symbol == "OBSCURE"].iloc[0]
     assert egfr["investigation_prior"] == 1.0
     assert obs["investigation_prior"] == 0.0
-    # Per-source columns populated
+    # Per-source columns populated; patent_count NaN unless lens is on
     assert int(egfr["pubmed_count"]) == 10_000
     assert int(egfr["europepmc_count"]) == 10_000
     assert int(egfr["trial_count"]) == 10_000
+    assert pd.isna(egfr["patent_count"])
 
 
 def test_disabled_source_omitted(tmp_path):
@@ -104,6 +105,121 @@ def test_fetch_failure_treated_as_zero(tmp_path):
     c = _client(tmp_path, boom)
     out = c.score_pairs(_pairs().head(1))
     assert out.iloc[0]["investigation_prior"] == 0.0
+
+
+# ----------------------------------------------------------------------
+# Synonym expansion -- target and disease both OR'd into the query
+# ----------------------------------------------------------------------
+def test_synonym_expansion_in_query(tmp_path):
+    """target_synonyms and disease_synonyms get OR'd into the search query."""
+    seen_queries = []
+
+    def capture(source, query):
+        seen_queries.append((source, query))
+        return 1
+
+    c = _client(tmp_path, capture, enable_clinicaltrials=False)
+    pairs = pd.DataFrame([{
+        "target_symbol": "EGFR",
+        "efo_id": "EFO_1",
+        "disease_name": "breast cancer",
+        "target_synonyms": "Epidermal growth factor receptor;ErbB-1",
+        "disease_synonyms": "breast carcinoma;mammary cancer",
+    }])
+    c.score_pairs(pairs)
+    pubmed_q = next(q for s, q in seen_queries if s == "pubmed")
+    # All target terms appear OR'd in the target clause
+    assert '"EGFR"[tiab]' in pubmed_q
+    assert '"Epidermal growth factor receptor"[tiab]' in pubmed_q
+    assert '"ErbB-1"[tiab]' in pubmed_q
+    # All disease terms appear OR'd in the disease clause
+    assert '"breast cancer"[tiab]' in pubmed_q
+    assert '"breast carcinoma"[tiab]' in pubmed_q
+    assert " OR " in pubmed_q and " AND " in pubmed_q
+    # Europe PMC variant uses TITLE_ABS
+    epmc_q = next(q for s, q in seen_queries if s == "europepmc")
+    assert 'TITLE_ABS:"EGFR"' in epmc_q
+    assert 'TITLE_ABS:"breast carcinoma"' in epmc_q
+
+
+def test_synonym_cap_respected(tmp_path):
+    """max_synonyms_target / max_synonyms_disease prevent runaway query bloat."""
+    captured = []
+
+    def capture(source, query):
+        captured.append(query)
+        return 0
+
+    c = _client(tmp_path, capture, enable_europepmc=False, enable_clinicaltrials=False,
+                max_synonyms_target=2, max_synonyms_disease=2)
+    pairs = pd.DataFrame([{
+        "target_symbol": "EGFR",
+        "efo_id": "EFO_1",
+        "disease_name": "breast cancer",
+        "target_synonyms": "alias_a;alias_b;alias_c;alias_d;alias_e",
+        "disease_synonyms": "syn_a;syn_b;syn_c;syn_d",
+    }])
+    c.score_pairs(pairs)
+    q = captured[0]
+    # Primary + 1 alias on each side = 2 total each; later aliases must be absent
+    assert '"alias_a"[tiab]' in q  # alphabetised, kept
+    assert '"alias_e"[tiab]' not in q
+    assert '"syn_a"[tiab]' in q
+    assert '"syn_d"[tiab]' not in q
+
+
+def test_synonym_ordering_is_stable(tmp_path):
+    """Same (primary, synonyms) input -> identical query string -> cache hit."""
+    calls = []
+
+    def capture(source, query):
+        calls.append((source, query))
+        return 5
+
+    c = _client(tmp_path, capture, enable_europepmc=False, enable_clinicaltrials=False)
+    base = pd.DataFrame([{
+        "target_symbol": "EGFR", "efo_id": "EFO_1", "disease_name": "BC",
+        "target_synonyms": "B_alias;A_alias",
+    }])
+    # Same content, different synonym ordering on second call
+    flipped = base.copy()
+    flipped.loc[0, "target_synonyms"] = "A_alias;B_alias"
+    c.score_pairs(base)
+    c.score_pairs(flipped)
+    # Either second call hits the cache (no new fetcher invocations) or the
+    # query strings are identical -- both prove sort-then-cap is deterministic.
+    pubmed_calls = [q for s, q in calls if s == "pubmed"]
+    assert len(set(pubmed_calls)) == 1, f"unstable query strings: {pubmed_calls}"
+
+
+# ----------------------------------------------------------------------
+# Lens patent backend
+# ----------------------------------------------------------------------
+def test_lens_off_by_default(tmp_path):
+    """Without lens_api_token, lens isn't queried even if enable_lens=True."""
+    seen_sources = set()
+
+    def capture(source, query):
+        seen_sources.add(source)
+        return 1
+
+    # enable_lens=True but no token -> still skipped
+    c = _client(tmp_path, capture, enable_lens=True)
+    c.score_pairs(_pairs().head(1))
+    assert "lens" not in seen_sources
+
+
+def test_lens_fires_when_token_set(tmp_path):
+    """With token + enable_lens, lens is queried and patent_count is populated."""
+    def fake(source, query):
+        if source == "lens":
+            return 25
+        return 5
+
+    c = _client(tmp_path, fake, enable_lens=True, lens_api_token="fake-token-for-test")
+    out = c.score_pairs(_pairs().head(1))
+    assert int(out.iloc[0]["patent_count"]) == 25
+    assert out.iloc[0]["investigation_prior"] > 0
 
 
 # ----------------------------------------------------------------------
