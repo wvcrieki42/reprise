@@ -53,6 +53,18 @@ novelty:
   ontology_radius: 1
   soft: true
 
+severity:
+  # Damp 'receptor LoF + agonist' hypotheses: when disease_gene_match is
+  # populated AND the disease name carries severity language (deficiency,
+  # complete absence, Donohue, etc.) AND the drug is an AGONIST on the
+  # named gene, the agonist can't activate a broken receptor -- knock
+  # opportunity down. Doesn't touch partial-LoF rescuables where the
+  # disease name doesn't include 'deficiency' (TZDs -> PPARG-related
+  # familial partial lipodystrophy, calcimimetics -> familial
+  # hypocalciuric hypercalcemia 1).
+  enabled: true
+  damp_factor: 0.7             # 1.0 = full knockdown; 0.0 = inspection only
+
 direction:
   enabled: true
   aligned_factor: 1.0
