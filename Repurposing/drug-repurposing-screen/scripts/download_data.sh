@@ -114,6 +114,12 @@ download_ot_parquet_dir "baselineExpression"
 echo ">> EFO ontology (disease parents, for novelty radius)"
 wget -nc "http://www.ebi.ac.uk/efo/efo.obo"
 
+echo ">> FDA Orange Book (patent + exclusivity expiries, generic availability)"
+mkdir -p orange_book && cd orange_book
+wget -nc -O ob.zip "https://www.fda.gov/media/76860/download?attachment" || true
+unzip -o ob.zip > /dev/null
+cd ..
+
 echo ">> (Optional) STRING full human network for offline expansion"
 wget -nc "https://stringdb-downloads.org/download/protein.links.v12.0/9606.protein.links.v12.0.txt.gz" || true
 # protein.info maps ENSP ids to HGNC symbols (used by build_string_edges.py).

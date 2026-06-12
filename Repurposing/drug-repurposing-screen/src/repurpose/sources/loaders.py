@@ -91,6 +91,31 @@ def load_gene_info(path: Path) -> pd.DataFrame:
     return df[["symbol", "gene_name"]]
 
 
+def load_orange_book(path: Path) -> pd.DataFrame:
+    """FDA Orange Book ingredient summary -- per-substance IP signals.
+
+    Returns columns: ingredient, latest_patent_year, latest_exclusivity_year,
+    loe_year, has_generic, n_nda, n_anda. Missing file -> empty frame
+    (pipeline silently no-ops these columns).
+    """
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame(columns=["ingredient", "latest_patent_year",
+                                     "latest_exclusivity_year", "loe_year",
+                                     "has_generic", "n_nda", "n_anda"])
+    df = _read(p)
+    # Year fields and counts are numeric; bool column gets coerced.
+    for c in ("latest_patent_year", "latest_exclusivity_year", "loe_year",
+              "n_nda", "n_anda"):
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    if "has_generic" in df.columns:
+        df["has_generic"] = df["has_generic"].astype(str).str.lower().map(
+            {"true": True, "false": False}).astype("boolean")
+    return df[["ingredient", "latest_patent_year", "latest_exclusivity_year",
+               "loe_year", "has_generic", "n_nda", "n_anda"]]
+
+
 def load_target_pathways(path: Path) -> pd.DataFrame:
     """target_symbol -> pathway_id, pathway_name, top_level (Reactome via OT).
 

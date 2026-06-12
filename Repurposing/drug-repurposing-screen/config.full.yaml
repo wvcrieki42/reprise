@@ -17,6 +17,7 @@ paths:
   chembl_substance_map: data/full/chembl_substance_map.csv # from adapters.chembl_substance_map
   disease_synonyms: data/full/disease_synonyms.csv        # from adapters.opentargets_disease_synonyms
   target_pathways:  data/full/target_pathways.csv         # from adapters.opentargets_target_pathways
+  orange_book:      data/full/fda_orange_book.csv         # from adapters.fda_orange_book
   string_edges:     data/full/string_edges.csv            # from scripts/build_string_edges.py
   outdir:           output_full
 
@@ -102,6 +103,15 @@ scoring:
   promiscuity_penalty: true
   min_opportunity: 0.05        # tighter cut for the very large full-scale output
   top_n: 200000
+
+ip:
+  # FDA Orange Book IP signals per active ingredient. Inspection-only
+  # (no scoring change). Match is on the substance_name post-collapse with
+  # salt-suffix normalisation (PIOGLITAZONE HYDROCHLORIDE -> PIOGLITAZONE).
+  # Orange Book covers small molecules only -- biologics (BLA, in the
+  # Purple Book) get NaN columns, which is the right behaviour for the
+  # 'has it gone generic / how long until LOE' question.
+  enabled: true
 
 market:
   # US market-size enrichment for predicted diseases. Joins a curated CSV

@@ -16,6 +16,7 @@ self-contained and dependency-light (sqlite3, pandas) so they run on a laptop.
 """
 from __future__ import annotations
 import sqlite3
+from pathlib import Path
 import pandas as pd
 
 
@@ -225,6 +226,112 @@ def opentargets_target_direction(evidence_parquet_dir: str, gene_map_csv: str,
     out = vote.merge(genes, on="ensembl_id", how="inner")
     out["evidence"] = "Open Targets genetic direction-of-effect"
     return out[["target_symbol", "efo_id", "therapeutic_direction", "evidence"]]
+
+
+# ----------------------------------------------------------------------
+# FDA Orange Book  ->  per-ingredient patent / exclusivity / generic flags
+# ----------------------------------------------------------------------
+# Common salt and hydrate suffixes that drop OFF before matching ChEMBL's
+# active-ingredient (parent) name. Order matters -- longer phrases first.
+_SALT_SUFFIXES = (
+    " HYDROCHLORIDE", " HYDROBROMIDE", " HYDROIODIDE",
+    " SODIUM", " POTASSIUM", " CALCIUM", " MAGNESIUM", " ZINC",
+    " ACETATE", " MESYLATE", " MALEATE", " TARTRATE", " CITRATE",
+    " FUMARATE", " PHOSPHATE", " SULFATE", " SUCCINATE",
+    " BROMIDE", " CHLORIDE", " NITRATE", " GLUCONATE",
+    " PROPANEDIOL", " BENZOATE", " PIDOLATE", " OXALATE", " PAMOATE",
+    " DIHYDRATE", " MONOHYDRATE", " TRIHYDRATE",
+)
+
+
+def _normalize_ingredient(name: str) -> str:
+    """Strip common salt/hydrate suffixes so PIOGLITAZONE HYDROCHLORIDE -> PIOGLITAZONE."""
+    n = (name or "").upper().strip()
+    changed = True
+    while changed:
+        changed = False
+        for suf in _SALT_SUFFIXES:
+            if n.endswith(suf):
+                n = n[:-len(suf)].strip()
+                changed = True
+                break
+    return n
+
+
+def fda_orange_book(orange_book_dir: str) -> pd.DataFrame:
+    """Per active ingredient: latest patent year, latest exclusivity year, generic status.
+
+    Reads the three tilde-separated text files extracted from the FDA Orange
+    Book monthly ZIP (products.txt, patent.txt, exclusivity.txt). For each
+    canonical ingredient (combination products split on ";", salt suffixes
+    stripped), we report:
+      - latest_patent_year: max patent expiration year across products with
+        this ingredient
+      - latest_exclusivity_year: max regulatory-exclusivity expiration year
+      - loe_year: max of the two -- the year both patent and exclusivity
+        have lapsed (the actionable "loss-of-exclusivity" date)
+      - has_generic: True if any ANDA (Abbreviated New Drug Application,
+        Appl_Type='A') product exists for this ingredient
+      - n_nda / n_anda: counts of brand and generic application entries
+
+    Orange Book is small-molecule only; biologics (insulins, antibodies,
+    etc.) are in the Purple Book and get no match here -- NaN columns in
+    the output are normal for those.
+    """
+    base = Path(orange_book_dir)
+    products = pd.read_csv(base / "products.txt", sep="~", dtype=str,
+                           on_bad_lines="skip")
+    patents = pd.read_csv(base / "patent.txt", sep="~", dtype=str,
+                          on_bad_lines="skip")
+    excl = pd.read_csv(base / "exclusivity.txt", sep="~", dtype=str,
+                       on_bad_lines="skip")
+
+    # Explode combination products into one row per component ingredient.
+    p = products[["Appl_No", "Product_No", "Appl_Type", "Ingredient"]].copy()
+    p["Ingredient"] = p["Ingredient"].fillna("")
+    p = p.assign(ingredient_raw=p["Ingredient"].str.split(";")) \
+         .explode("ingredient_raw")
+    p["ingredient_raw"] = p["ingredient_raw"].str.strip()
+    p = p[p["ingredient_raw"] != ""]
+    p["ingredient"] = p["ingredient_raw"].apply(_normalize_ingredient)
+
+    # Per-application aggregates
+    by_ing = p.groupby("ingredient")
+    n_nda = by_ing.apply(lambda g: (g["Appl_Type"] == "N").sum(),
+                         include_groups=False).rename("n_nda")
+    n_anda = by_ing.apply(lambda g: (g["Appl_Type"] == "A").sum(),
+                          include_groups=False).rename("n_anda")
+    has_generic = (n_anda > 0).rename("has_generic")
+
+    # Patent expirations: join with the products map on (Appl_No, Product_No)
+    pat = patents[["Appl_No", "Product_No", "Patent_Expire_Date_Text"]] \
+        .merge(p[["Appl_No", "Product_No", "ingredient"]],
+               on=["Appl_No", "Product_No"], how="inner")
+    pat["expire"] = pd.to_datetime(pat["Patent_Expire_Date_Text"],
+                                    errors="coerce")
+    pat = pat.dropna(subset=["expire"])
+    latest_patent = (pat.groupby("ingredient")["expire"].max()
+                       .dt.year.rename("latest_patent_year"))
+
+    # Exclusivity expirations
+    ex = excl[["Appl_No", "Product_No", "Exclusivity_Date"]] \
+        .merge(p[["Appl_No", "Product_No", "ingredient"]],
+               on=["Appl_No", "Product_No"], how="inner")
+    ex["expire"] = pd.to_datetime(ex["Exclusivity_Date"], errors="coerce")
+    ex = ex.dropna(subset=["expire"])
+    latest_excl = (ex.groupby("ingredient")["expire"].max()
+                     .dt.year.rename("latest_exclusivity_year"))
+
+    out = (pd.DataFrame({"ingredient": sorted(by_ing.groups.keys())})
+             .merge(n_nda.reset_index(), on="ingredient", how="left")
+             .merge(n_anda.reset_index(), on="ingredient", how="left")
+             .merge(has_generic.reset_index(), on="ingredient", how="left")
+             .merge(latest_patent.reset_index(), on="ingredient", how="left")
+             .merge(latest_excl.reset_index(), on="ingredient", how="left"))
+    out["loe_year"] = out[["latest_patent_year", "latest_exclusivity_year"]] \
+        .max(axis=1)
+    return out[["ingredient", "latest_patent_year", "latest_exclusivity_year",
+                "loe_year", "has_generic", "n_nda", "n_anda"]]
 
 
 def opentargets_target_pathways(targets_parquet_dir: str,

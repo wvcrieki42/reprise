@@ -150,6 +150,17 @@ def main() -> None:
         ["drug_id", "substance_chembl_id"],
         "chembl_substance_map.csv",
     )
+    ob_dir = FULL / "orange_book"
+    if ob_dir.exists() and (ob_dir / "products.txt").exists():
+        print("FDA Orange Book -> fda_orange_book.csv")
+        export_filtered_csv(
+            adapters.fda_orange_book(str(ob_dir)),
+            FULL / "fda_orange_book.csv",
+            ["ingredient"],
+            "fda_orange_book.csv",
+        )
+    else:
+        print(f"[skip] {ob_dir} not present (run scripts/download_data.sh first)")
     print("Open Targets -> target_pathways.csv")
     export_filtered_csv(
         adapters.opentargets_target_pathways(str(OT_TARGETS), str(gene_map_csv)),
