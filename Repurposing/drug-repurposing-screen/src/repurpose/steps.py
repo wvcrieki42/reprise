@@ -494,6 +494,102 @@ def add_literature_pass(ranked: pd.DataFrame, lit_client, cfg: Config) -> pd.Dat
 
 
 # ----------------------------------------------------------------------
+# Step 5f - pathway-level mechanistic evidence (Reactome via OT)
+# ----------------------------------------------------------------------
+def add_pathway_evidence(ranked: pd.DataFrame, drug_targets: pd.DataFrame,
+                          target_pathways: pd.DataFrame,
+                          target_disease: pd.DataFrame, cfg: Config) -> pd.DataFrame:
+    """Boost opportunity when drug's targets share pathways with disease's strong targets.
+
+    Captures the indirect mechanism case: drug hits target A; target A is in
+    the same pathway as disease-driving target B that the drug doesn't hit
+    directly. Reactome pathway co-membership is treated as weaker evidence
+    than direct target overlap (which mechanistic_support already credits),
+    so the default boost is smaller.
+
+    Restricted to SPECIFIC pathways (<= max_pathway_size genes) to avoid
+    generic categories matching everything. Restricted to STRONGLY-
+    associated disease targets (assoc_score >= min_assoc) to avoid
+    pulling in disease associations driven by noise.
+
+    Asymmetric boost like phylogenetics: present overlap multiplies
+    opportunity by (1 + boost * pathway_score); absence applies no penalty
+    (factor 1.0).
+
+        pathway_score = log1p(n_overlap) / log1p(saturation)
+        pathway_factor = 1 + boost * pathway_score   (default boost = 0.3)
+    """
+    if not bool(cfg.get("pathway", "enabled", default=False)):
+        ranked = ranked.copy()
+        ranked["pathway_factor"] = 1.0
+        ranked["pathway_score"] = 0.0
+        ranked["n_pathway_overlap"] = 0
+        return ranked
+    boost = float(cfg.get("pathway", "boost_factor", default=0.3))
+    max_size = int(cfg.get("pathway", "max_pathway_size", default=80))
+    min_assoc = float(cfg.get("pathway", "min_assoc", default=0.3))
+    saturation = int(cfg.get("pathway", "saturation", default=5))
+    indirect_only = bool(cfg.get("pathway", "indirect_only", default=True))
+
+    out = ranked.copy()
+    if target_pathways.empty or out.empty:
+        out["pathway_factor"] = 1.0
+        out["pathway_score"] = 0.0
+        out["n_pathway_overlap"] = 0
+        return out
+
+    # Filter pathways to specific ones (small enough to be meaningful)
+    sizes = target_pathways.groupby("pathway_id")["target_symbol"].nunique()
+    keep = set(sizes[sizes <= max_size].index)
+    tp = target_pathways[target_pathways["pathway_id"].isin(keep)]
+
+    # disease_pathways: pathway memberships of the disease's STRONG targets,
+    # keeping target identity so we can filter direct hits later.
+    td_strong = target_disease[target_disease["assoc_score"] >= min_assoc]
+    disease_paths = (td_strong[["efo_id", "target_symbol"]]
+                       .merge(tp[["target_symbol", "pathway_id"]], on="target_symbol")
+                       .drop_duplicates(["efo_id", "target_symbol", "pathway_id"])
+                       .rename(columns={"target_symbol": "disease_target"}))
+
+    # drug_pathways: pathway memberships of the drug's DIRECT targets.
+    dt = drug_targets
+    if "is_direct" in dt.columns:
+        dt = dt[dt["is_direct"]]
+    drug_paths = (dt[["drug_id", "target_symbol"]]
+                    .merge(tp[["target_symbol", "pathway_id"]], on="target_symbol")
+                    .drop_duplicates(["drug_id", "target_symbol", "pathway_id"])
+                    .rename(columns={"target_symbol": "drug_target"}))
+
+    # Bridge: for each (drug, disease, pathway), find drug_target and
+    # disease_target sharing that pathway.
+    keys = out[["drug_id", "efo_id"]].drop_duplicates()
+    bridges = (keys.merge(drug_paths, on="drug_id")
+                   .merge(disease_paths, on=["efo_id", "pathway_id"]))
+    if indirect_only:
+        # The pathway boost should reward cases the direct-target signal MISSES.
+        # Drop bridges where the drug hits exactly the disease's strong target
+        # in this pathway -- that contribution is already in mechanistic_support.
+        bridges = bridges[bridges["drug_target"] != bridges["disease_target"]]
+    overlap = (bridges.drop_duplicates(["drug_id", "efo_id", "pathway_id"])
+                       .groupby(["drug_id", "efo_id"]).size()
+                       .rename("n_pathway_overlap").reset_index())
+    overlap["pathway_score"] = overlap["n_pathway_overlap"].apply(
+        lambda c: round(min(np.log1p(c) / np.log1p(saturation), 1.0), 4))
+    overlap["pathway_factor"] = (1.0 + boost * overlap["pathway_score"]).round(4)
+
+    out = out.merge(overlap, on=["drug_id", "efo_id"], how="left")
+    out["pathway_factor"] = out["pathway_factor"].fillna(1.0)
+    out["pathway_score"] = out["pathway_score"].fillna(0.0)
+    out["n_pathway_overlap"] = out["n_pathway_overlap"].fillna(0).astype(int)
+    # Apply the multiplicative boost to opportunity and re-rank
+    out["opportunity"] = (out["opportunity"] * out["pathway_factor"]).round(5)
+    out = out.sort_values("opportunity", ascending=False).reset_index(drop=True)
+    if "rank" in out.columns:
+        out["rank"] = out.index + 1
+    return out
+
+
+# ----------------------------------------------------------------------
 # Step 5e - active-substance grouping (collapse formulation variants)
 # ----------------------------------------------------------------------
 def collapse_to_substances(ranked: pd.DataFrame, substance_map: pd.DataFrame,

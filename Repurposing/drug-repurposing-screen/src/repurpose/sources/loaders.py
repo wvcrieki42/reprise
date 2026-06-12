@@ -91,6 +91,22 @@ def load_gene_info(path: Path) -> pd.DataFrame:
     return df[["symbol", "gene_name"]]
 
 
+def load_target_pathways(path: Path) -> pd.DataFrame:
+    """target_symbol -> pathway_id, pathway_name, top_level (Reactome via OT).
+
+    Returns an empty frame if the file is missing -- the pathway step
+    will become a no-op.
+    """
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame(columns=["target_symbol", "pathway_id",
+                                     "pathway_name", "top_level"])
+    df = _read(p)
+    df["pathway_name"] = df["pathway_name"].fillna("").astype(str)
+    df["top_level"] = df["top_level"].fillna("").astype(str)
+    return df[["target_symbol", "pathway_id", "pathway_name", "top_level"]]
+
+
 def load_disease_synonyms(path: Path) -> pd.DataFrame:
     """efo_id -> disease_synonyms (semicolon-separated exact synonyms).
 

@@ -20,6 +20,7 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "substance_chembl_id", "substance
                "direction_factor", "direction_status",
                "tissue_factor", "tissue_status", "tissue_evidence",
                "phylo_factor", "phylo_score", "phylo_n_models", "phylo_sources",
+               "pathway_factor", "pathway_score", "n_pathway_overlap",
                "disease_gene_match",
                "pubmed_count", "europepmc_count", "trial_count", "patent_count",
                "investigation_prior",
@@ -129,6 +130,11 @@ def _prepare(cfg: Config, log):
     disease_synonyms = (loaders.load_disease_synonyms(cfg.path("disease_synonyms"))
                         if cfg.get("paths", "disease_synonyms", default=None) is not None
                         else pd.DataFrame(columns=["efo_id", "disease_synonyms"]))
+    pathway_on = bool(cfg.get("pathway", "enabled", default=False))
+    target_pathways = (loaders.load_target_pathways(cfg.path("target_pathways"))
+                       if pathway_on else
+                       pd.DataFrame(columns=["target_symbol", "pathway_id",
+                                              "pathway_name", "top_level"]))
 
     universe = steps.build_universe(drugs, cfg)
     log(f"universe (approved US/EU): {len(universe)} drugs")
@@ -159,9 +165,10 @@ def _prepare(cfg: Config, log):
     return {"universe": universe, "drug_targets": dt, "target_direction": target_direction,
             "target_expression": target_expression, "disease_tissue": disease_tissue,
             "phylo_evidence": phylo_evidence, "substance_map": substance_map,
-            "disease_synonyms": disease_synonyms,
+            "disease_synonyms": disease_synonyms, "target_pathways": target_pathways,
             "gene_info": gene_info, "known_exp": known_exp, "breadth": breadth,
-            "direction_on": direction_on, "tissue_on": tissue_on, "phylo_on": phylo_on}
+            "direction_on": direction_on, "tissue_on": tissue_on, "phylo_on": phylo_on,
+            "pathway_on": pathway_on}
 
 
 def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
@@ -201,6 +208,21 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
     if "drug_name" not in ranked.columns:
         ranked = ranked.merge(prep["universe"][["drug_id", "drug_name"]],
                               on="drug_id", how="left")
+
+    # Pathway-level mechanistic evidence: boost (drug, disease) pairs where
+    # the drug's direct targets share Reactome pathways with the disease's
+    # strongly-associated targets. Post-engine so both pandas and duckdb get
+    # the same modification.
+    if prep["pathway_on"]:
+        # Need target_disease loaded; the duckdb engine streamed it but
+        # didn't return it. The pandas engine already loaded it above.
+        if 'target_disease' not in locals():
+            target_disease = loaders.load_target_disease(cfg.path("target_disease"))
+        ranked = steps.add_pathway_evidence(
+            ranked, prep["drug_targets"], prep["target_pathways"],
+            target_disease, cfg)
+        n_boost = (ranked["pathway_factor"] > 1.0).sum()
+        log(f"pathway pass: {n_boost} of {len(ranked)} hypotheses got a pathway boost")
 
     # Collapse formulation variants up to their active-ingredient parent BEFORE
     # the downstream passes so the literature / market lookups operate on

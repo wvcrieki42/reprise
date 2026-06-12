@@ -16,6 +16,7 @@ paths:
   gene_info:        data/full/gene_info.csv               # from adapters.opentargets_gene_info
   chembl_substance_map: data/full/chembl_substance_map.csv # from adapters.chembl_substance_map
   disease_synonyms: data/full/disease_synonyms.csv        # from adapters.opentargets_disease_synonyms
+  target_pathways:  data/full/target_pathways.csv         # from adapters.opentargets_target_pathways
   string_edges:     data/full/string_edges.csv            # from scripts/build_string_edges.py
   outdir:           output_full
 
@@ -58,6 +59,22 @@ direction:
   unknown_factor: 0.6
   default_factor: 1.0
   align_threshold: 0.34
+
+pathway:
+  # Boost (drug, disease) pairs where the drug's direct targets share Reactome
+  # pathways with the disease's strongly-associated targets. Captures the
+  # indirect mechanism case: drug -> target A -> pathway P <- target B <- disease,
+  # where A != B. Restricted to specific pathways (<= max_pathway_size genes)
+  # so generic categories don't match everything. Boost-only (no penalty on
+  # absence) -- weaker evidence than direct target overlap (default boost
+  # smaller than phylogenetics).
+  enabled: true
+  boost_factor: 0.3            # max 1.3x boost when n_overlap >= saturation
+  max_pathway_size: 80         # filter out generic / supercategory pathways
+  min_assoc: 0.3               # only count strongly-associated disease targets
+  saturation: 5                # n_overlap at which pathway_score saturates
+  indirect_only: true          # only credit drug_target != disease_target bridges
+                               # (direct hits already counted in mechanistic_support)
 
 phylogenetics:
   # Boost-only filter: model-organism (orthologous-gene) evidence for the
