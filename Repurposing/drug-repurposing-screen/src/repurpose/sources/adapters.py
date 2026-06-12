@@ -130,7 +130,27 @@ def opentargets_target_disease(parquet_dir: str, gene_map_csv: str,
 # ----------------------------------------------------------------------
 # EFO ontology  ->  disease_ontology (efo_id, name, parent_efo_id)
 # ----------------------------------------------------------------------
-def opentargets_target_direction(evidence_parquet_dir: str, gene_map_csv: str) -> pd.DataFrame:
+# OT datasources whose variantEffect / directionOnTrait fields actually encode
+# THERAPEUTIC direction in humans. Mouse-KO phenotypes (IMPC) and somatic-cancer
+# sources are intentionally EXCLUDED here -- they are great for `add_phylo_evidence`
+# but not for inferring agonist-vs-antagonist therapeutic intent. Without this
+# filter, IMPC alone (~1.1M rows, the largest source by far) drowns out the
+# curated human-genetics signals and flips therapeutic direction for monogenic
+# disorders where the human variant mechanism (e.g. truncating GoF EPOR) differs
+# from what a complete mouse knockout looks like.
+DEFAULT_DIRECTION_SOURCES: tuple[str, ...] = (
+    "ot_genetics_portal",   # GWAS effect-direction
+    "gene_burden",          # rare-variant burden tests
+    "eva",                  # ClinVar germline interpretations
+    "gene2phenotype",       # curated gene-disease
+    "clingen",              # ClinGen gene-disease validity
+    "genomics_england",     # PanelApp
+    "orphanet",             # rare-disease curation
+)
+
+
+def opentargets_target_direction(evidence_parquet_dir: str, gene_map_csv: str,
+                                 sources: tuple[str, ...] = DEFAULT_DIRECTION_SOURCES) -> pd.DataFrame:
     """Derive therapeutic_direction in {-1,+1} from Open Targets genetic evidence.
 
     Uses the variant effect (loss/gain of function) and its direction on the trait
@@ -139,14 +159,23 @@ def opentargets_target_direction(evidence_parquet_dir: str, gene_map_csv: str) -
         increasing target activity is RISK       -> inhibit  (therapeutic_direction = -1)
         increasing target activity is PROTECTIVE -> activate (therapeutic_direction = +1)
 
-    where 'increasing activity' = GoF-risk / LoF-protective etc. Pass the
-    `evidence` parquet (sources with directionality, e.g. gene_burden, ot_genetics_portal,
-    eva) and the ensembl->symbol map. Conflicting genes are resolved by majority vote.
+    where 'increasing activity' = GoF-risk / LoF-protective etc. Conflicting
+    genes are resolved by majority vote across the kept sources. Only the OT
+    sources listed in `sources` (default DEFAULT_DIRECTION_SOURCES) are read --
+    we explicitly exclude IMPC and other non-therapeutic sources here.
     """
-    ev = pd.read_parquet(evidence_parquet_dir)
+    from pathlib import Path as _Path
+    files: list[str] = []
+    base = _Path(evidence_parquet_dir)
+    for src in sources:
+        files.extend(str(p) for p in sorted(base.glob(f"sourceId={src}/*.parquet")))
+    if not files:
+        return pd.DataFrame(columns=["target_symbol", "efo_id",
+                                     "therapeutic_direction", "evidence"])
+    ev = pd.read_parquet(files, columns=[
+        "targetId", "diseaseId", "variantEffect", "directionOnTrait"])
     ev = ev.rename(columns={"targetId": "ensembl_id", "diseaseId": "efo_id"})
-    cols = [c for c in ["ensembl_id", "efo_id", "variantEffect", "directionOnTrait"] if c in ev.columns]
-    ev = ev[cols].dropna(subset=["variantEffect", "directionOnTrait"])
+    ev = ev.dropna(subset=["variantEffect", "directionOnTrait"])
 
     def _therapeutic_dir(row) -> int:
         eff = str(row["variantEffect"]).upper()        # LOF / GOF
