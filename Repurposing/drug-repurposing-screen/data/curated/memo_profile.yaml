@@ -1,0 +1,39 @@
+# Profile used by scripts/build_deal_memos.py to personalise outreach memos.
+# Override on the command line with --profile path/to/other.yaml.
+
+group:
+  name: BioBix
+  affiliation: Department of Mathematical Modelling, Statistics and Bioinformatics, Ghent University
+  pi_name: Wim Van Criekinge
+  pi_title: Professor
+  pi_email: Wim.VanCriekinge@UGent.be
+  pi_credentials: PhD, h-index 73
+
+  # One-paragraph what-we-bring statement. Plain prose; one line per item.
+  pitch:
+    - Target validation across blood / immune / cancer multi-omics datasets
+    - Biomarker candidate identification from public + private cohorts
+    - Patient stratification analytics for trial-enrichment design
+    - Mechanism-of-action mining via systems-biology priors
+    - Quick-turn evidence syntheses for IIT and partnered programs
+
+# Drug-company note. Most repurposed substances are still under exclusivity
+# (Orange Book signals this in the screen output); a co-development /
+# investigator-initiated trial (IIT) is the usual model.
+collaboration_model:
+  - Investigator-initiated trial framework with the substance owner
+  - BioBix as bioinformatics analytics partner (target/biomarker/biostatistics)
+  - Joint publication strategy; data-sharing agreement gated on IP terms
+
+next_step:
+  ask: |
+    A 30-minute scoping call to align on feasibility. We would come prepared
+    with a brief mechanistic dossier, an annotated literature pull, and a
+    pilot biomarker shortlist for the disease.
+
+# Disclaimer printed at the bottom of every memo.
+footer_disclaimer: |
+  This memo was auto-generated from the BioBix repurposing screen
+  (Open Targets + ChEMBL + Reactome + FDA Orange Book + Orphanet + PubMed
+  + Semantic Scholar). Figures are computational priors, not clinical
+  recommendations. Confidential -- for the named recipient only.
