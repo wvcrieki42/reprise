@@ -128,5 +128,14 @@ Done. Next:
   2) python scripts/build_string_edges.py           # writes data/full/string_edges.csv (~1.9M PPI edges)
   3) python scripts/build_disease_tissue.py         # writes data/full/disease_tissue.csv from OT therapeutic areas
   4) python scripts/populate_disease_prevalence.py  # writes data/curated/disease_prevalence.csv from curated dict
-  5) make full
+  5) (optional, but recommended for the literature pass) sign up for free
+     credentials and export them in your shell:
+       NCBI API key  -- https://www.ncbi.nlm.nih.gov/account/  (raises PubMed
+                        throughput from 3 -> 10 req/s; literature pass ~3x faster)
+       Lens API token -- https://www.lens.org/lens/user/subscriptions  (free
+                        academic tier; enables the patent backend)
+       export NCBI_API_KEY=...
+       export LENS_API_TOKEN=...
+     Setting LENS_API_TOKEN auto-enables enable_lens in the literature pass.
+  6) make full
 EOF

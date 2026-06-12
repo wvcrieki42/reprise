@@ -27,6 +27,7 @@ reason the pipeline stays tractable.
 """
 from __future__ import annotations
 import math
+import os
 import sqlite3
 import threading
 import time
@@ -35,6 +36,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 import pandas as pd
+
+
+# Env-var fallbacks for secrets. Set these in your shell instead of
+# putting tokens in config.full.yaml -- secrets stay out of git, and
+# the same config works across dev / prod environments.
+NCBI_API_KEY_ENV = "NCBI_API_KEY"
+LENS_API_TOKEN_ENV = "LENS_API_TOKEN"
 
 
 # ----------------------------------------------------------------------
@@ -158,11 +166,33 @@ class LiteraturePriorClient:
 
     def __post_init__(self) -> None:
         self.cache_dir = Path(self.cache_dir)
+        # Env-var fallbacks: explicit config wins, otherwise pick up the
+        # shell-exported secret. Empty strings are treated as unset.
+        if not self.ncbi_api_key:
+            self.ncbi_api_key = os.environ.get(NCBI_API_KEY_ENV) or None
+        if not self.lens_api_token:
+            self.lens_api_token = os.environ.get(LENS_API_TOKEN_ENV) or None
+        # With a token in hand, NCBI lets us go 10 req/s instead of 3.
+        if self.ncbi_api_key and self.rate_per_sec.get("pubmed", 0) < 10.0:
+            self.rate_per_sec["pubmed"] = 10.0
+        # If the operator went to the trouble of setting a Lens token,
+        # default-on the patent backend so it actually fires.
+        if self.lens_api_token and not self.enable_lens:
+            self.enable_lens = True
         self._cache = _CountCache(self.cache_dir / "literature.sqlite",
                                   self.cache_ttl_seconds)
         self._limiters = {s: _RateLimiter(r) for s, r in self.rate_per_sec.items()}
         # session reused across threads (requests.Session is threadsafe for GETs)
         self._session = None
+
+    def credentials_summary(self) -> str:
+        """One-line summary of which credentials the client picked up.
+        Suitable for logging at the start of a literature pass."""
+        bits = []
+        bits.append("ncbi_key=" + ("set" if self.ncbi_api_key else "unset"))
+        bits.append("lens_token=" + ("set" if self.lens_api_token else "unset"))
+        bits.append(f"pubmed_rate={self.rate_per_sec.get('pubmed', 3.0)}/s")
+        return ", ".join(bits)
 
     # ------------------------------------------------------------------
     # Public API

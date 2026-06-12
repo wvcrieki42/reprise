@@ -223,6 +223,58 @@ def test_lens_fires_when_token_set(tmp_path):
 
 
 # ----------------------------------------------------------------------
+# Credentials -- env-var fallback + auto-enable-on-token behaviour
+# ----------------------------------------------------------------------
+from unittest.mock import patch as _patch
+
+
+def test_env_var_fallback_for_ncbi_key(tmp_path):
+    """No config-level key + NCBI_API_KEY in env -> picked up automatically."""
+    with _patch.dict("os.environ", {"NCBI_API_KEY": "env-ncbi-key-123",
+                                    "LENS_API_TOKEN": ""}, clear=False):
+        c = LiteraturePriorClient(cache_dir=tmp_path)
+        assert c.ncbi_api_key == "env-ncbi-key-123"
+        # And throughput should bump to 10 req/s
+        assert c.rate_per_sec["pubmed"] == 10.0
+
+
+def test_explicit_config_overrides_env(tmp_path):
+    """Explicit constructor arg wins over env var."""
+    with _patch.dict("os.environ", {"NCBI_API_KEY": "env-key"}, clear=False):
+        c = LiteraturePriorClient(cache_dir=tmp_path, ncbi_api_key="explicit-key")
+        assert c.ncbi_api_key == "explicit-key"
+
+
+def test_env_var_fallback_for_lens_token(tmp_path):
+    """LENS_API_TOKEN in env -> token picked up AND enable_lens flipped on."""
+    with _patch.dict("os.environ", {"LENS_API_TOKEN": "env-lens-token",
+                                    "NCBI_API_KEY": ""}, clear=False):
+        c = LiteraturePriorClient(cache_dir=tmp_path)
+        assert c.lens_api_token == "env-lens-token"
+        assert c.enable_lens is True
+
+
+def test_credentials_summary(tmp_path):
+    c = LiteraturePriorClient(cache_dir=tmp_path,
+                              ncbi_api_key="k", lens_api_token="t")
+    s = c.credentials_summary()
+    assert "ncbi_key=set" in s
+    assert "lens_token=set" in s
+    assert "pubmed_rate=10.0" in s
+
+
+def test_no_credentials_keeps_defaults(tmp_path):
+    """No env, no config -> nothing set, throughput stays at default."""
+    with _patch.dict("os.environ", {"NCBI_API_KEY": "", "LENS_API_TOKEN": ""},
+                     clear=False):
+        c = LiteraturePriorClient(cache_dir=tmp_path)
+        assert c.ncbi_api_key is None
+        assert c.lens_api_token is None
+        assert c.enable_lens is False
+        assert c.rate_per_sec["pubmed"] == 3.0
+
+
+# ----------------------------------------------------------------------
 # Two-pass step integration -- exercises steps.add_literature_pass
 # ----------------------------------------------------------------------
 def _ranked():
