@@ -63,6 +63,11 @@ def _maybe_literature_pass(ranked: pd.DataFrame, cfg: Config, prep: dict, log) -
         syn = syn[syn["gene_name"].str.strip() != ""].rename(
             columns={"symbol": "lead_target", "gene_name": "target_synonyms"})
         ranked = ranked.merge(syn, on="lead_target", how="left")
+    # Same on the disease side: OT exact synonyms keyed by efo_id.
+    dsyn = prep.get("disease_synonyms")
+    if dsyn is not None and not dsyn.empty:
+        ranked = ranked.merge(dsyn, on="efo_id", how="left")
+        ranked["disease_synonyms"] = ranked["disease_synonyms"].fillna("")
     return steps.add_literature_pass(ranked, lit, cfg)
 
 
@@ -121,6 +126,9 @@ def _prepare(cfg: Config, log):
     substance_map = (loaders.load_substance_map(cfg.path("chembl_substance_map"))
                      if cfg.get("paths", "chembl_substance_map", default=None) is not None
                      else pd.DataFrame(columns=["drug_id", "substance_chembl_id", "substance_name"]))
+    disease_synonyms = (loaders.load_disease_synonyms(cfg.path("disease_synonyms"))
+                        if cfg.get("paths", "disease_synonyms", default=None) is not None
+                        else pd.DataFrame(columns=["efo_id", "disease_synonyms"]))
 
     universe = steps.build_universe(drugs, cfg)
     log(f"universe (approved US/EU): {len(universe)} drugs")
@@ -151,6 +159,7 @@ def _prepare(cfg: Config, log):
     return {"universe": universe, "drug_targets": dt, "target_direction": target_direction,
             "target_expression": target_expression, "disease_tissue": disease_tissue,
             "phylo_evidence": phylo_evidence, "substance_map": substance_map,
+            "disease_synonyms": disease_synonyms,
             "gene_info": gene_info, "known_exp": known_exp, "breadth": breadth,
             "direction_on": direction_on, "tissue_on": tissue_on, "phylo_on": phylo_on}
 

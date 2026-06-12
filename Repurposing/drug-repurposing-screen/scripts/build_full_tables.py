@@ -150,6 +150,13 @@ def main() -> None:
         ["drug_id", "substance_chembl_id"],
         "chembl_substance_map.csv",
     )
+    print("Open Targets -> disease_synonyms.csv")
+    export_filtered_csv(
+        adapters.opentargets_disease_synonyms(str(OT_DISEASES)),
+        FULL / "disease_synonyms.csv",
+        ["efo_id"],
+        "disease_synonyms.csv",
+    )
     print("Open Targets -> phylo_evidence.csv")
     export_filtered_csv(
         adapters.opentargets_phylo_evidence(ot_evidence, str(gene_map_csv)),

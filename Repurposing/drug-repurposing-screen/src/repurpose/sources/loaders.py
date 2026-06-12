@@ -91,6 +91,20 @@ def load_gene_info(path: Path) -> pd.DataFrame:
     return df[["symbol", "gene_name"]]
 
 
+def load_disease_synonyms(path: Path) -> pd.DataFrame:
+    """efo_id -> disease_synonyms (semicolon-separated exact synonyms).
+
+    Returns an empty frame if the file is missing -- the literature pass
+    will fall back to disease name only (no synonym OR-expansion).
+    """
+    p = Path(path)
+    if not p.exists():
+        return pd.DataFrame(columns=["efo_id", "disease_synonyms"])
+    df = _read(p)
+    df["disease_synonyms"] = df["disease_synonyms"].fillna("").astype(str)
+    return df[["efo_id", "disease_synonyms"]]
+
+
 def load_substance_map(path: Path) -> pd.DataFrame:
     """ChEMBL drug_id -> substance_chembl_id, substance_name.
 

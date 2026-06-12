@@ -227,6 +227,58 @@ def opentargets_target_direction(evidence_parquet_dir: str, gene_map_csv: str,
     return out[["target_symbol", "efo_id", "therapeutic_direction", "evidence"]]
 
 
+def opentargets_disease_synonyms(diseases_parquet_dir: str,
+                                 max_synonyms: int = 8) -> pd.DataFrame:
+    """Per disease: efo_id, disease_synonyms (semicolon-separated exact synonyms).
+
+    Pulls `synonyms.hasExactSynonym` from the OT diseases parquet. We keep
+    only EXACT synonyms -- broad / narrow / related synonyms add noise to
+    a literature search (Heymann nephritis is an exact synonym for
+    membranous glomerulonephritis, but PAS is just a related concept).
+    The primary disease name is excluded since the literature client
+    OR's it in alongside the synonyms. Caps at `max_synonyms` per
+    disease so a few overloaded terms don't blow PubMed's expression
+    length.
+    """
+    df = pd.read_parquet(parquet_paths_helper(diseases_parquet_dir),
+                         columns=["id", "name", "synonyms"])
+
+    def _extract(row) -> str:
+        syn = row["synonyms"]
+        if syn is None:
+            return ""
+        exact = syn.get("hasExactSynonym") if hasattr(syn, "get") else None
+        if exact is None or len(exact) == 0:
+            return ""
+        primary_lc = str(row["name"] or "").strip().lower()
+        seen = {primary_lc}
+        kept: list[str] = []
+        for term in exact:
+            t = str(term).strip()
+            t_lc = t.lower()
+            if not t or t_lc in seen:
+                continue
+            seen.add(t_lc)
+            kept.append(t)
+            if len(kept) >= max_synonyms:
+                break
+        return ";".join(kept)
+
+    df["disease_synonyms"] = df.apply(_extract, axis=1)
+    df = df.rename(columns={"id": "efo_id"})
+    df = df[df["disease_synonyms"] != ""]
+    return df[["efo_id", "disease_synonyms"]].reset_index(drop=True)
+
+
+def parquet_paths_helper(dataset_dir: str) -> list[str]:
+    """Recursive parquet shard collector (mirrors scripts/build_full_tables.py)."""
+    from pathlib import Path as _Path
+    paths = sorted(_Path(dataset_dir).rglob("*.parquet"))
+    if not paths:
+        raise FileNotFoundError(f"No parquet files under {dataset_dir}")
+    return [str(p) for p in paths]
+
+
 def opentargets_phylo_evidence(evidence_parquet_dir: str, gene_map_csv: str,
                                sources: tuple[str, ...] = ("impc",),
                                min_score: float = 0.0) -> pd.DataFrame:
