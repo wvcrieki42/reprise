@@ -653,6 +653,46 @@ def collapse_to_substances(ranked: pd.DataFrame, substance_map: pd.DataFrame,
 
 
 # ----------------------------------------------------------------------
+# Step 5g - KOL finder (one US + one EU key opinion leader per hypothesis)
+# ----------------------------------------------------------------------
+def add_kol_pass(ranked: pd.DataFrame, kol_client, cfg: Config) -> pd.DataFrame:
+    """Look up a US + EU KOL for the top-N (lead_target, disease) pairs.
+
+    Inspection-only: never changes opportunity / rank. Uses the same
+    pattern as the literature pass -- dedup on (lead_target, efo_id,
+    disease_name) so substance variants share lookups.
+    """
+    top_n = int(cfg.get("kol", "top_n", default=100))
+    out_cols = [f"{r}_kol_{c}" for r in ("us", "eu")
+                for c in ("name", "institution", "email", "h_index", "n_pubs")]
+    out = ranked.copy()
+    if out.empty or top_n <= 0:
+        for c in out_cols:
+            out[c] = "" if not c.endswith(("h_index", "n_pubs")) else pd.NA
+        return out
+
+    head = out.head(top_n)
+    uniq_cols = ["lead_target", "efo_id", "disease_name"]
+    if "disease_synonyms" in head.columns:
+        uniq_cols.append("disease_synonyms")
+    uniq = (head[uniq_cols]
+            .rename(columns={"lead_target": "target_symbol"})
+            .dropna(subset=["target_symbol", "disease_name"])
+            .drop_duplicates(subset=["target_symbol", "efo_id", "disease_name"]))
+    kols = kol_client.find_kols(uniq).rename(columns={"target_symbol": "lead_target"})
+    # Strip synonyms column from the merge result so we don't duplicate it on ranked
+    if "disease_synonyms" in kols.columns and "disease_synonyms" in out.columns:
+        kols = kols.drop(columns=["disease_synonyms"])
+    out = out.merge(kols, on=["lead_target", "efo_id", "disease_name"], how="left")
+    for c in out_cols:
+        if c.endswith(("h_index", "n_pubs")):
+            out[c] = out[c].astype("Int64") if c in out.columns else pd.NA
+        else:
+            out[c] = out[c].fillna("") if c in out.columns else ""
+    return out
+
+
+# ----------------------------------------------------------------------
 # Step 5d - flag (drug, disease) pairs where the drug targets a gene named in the disease
 # ----------------------------------------------------------------------
 _GENE_TOKEN_RE = re.compile(r"\b([A-Z][A-Z0-9]{1,6})\b")

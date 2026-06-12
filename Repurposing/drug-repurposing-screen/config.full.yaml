@@ -125,6 +125,22 @@ market:
   orphanet_csv: data/curated/orphanet_prevalence.csv  # built by scripts/build_orphanet_prevalence.py
   rare_disease_us_threshold: 200000
 
+kol:
+  # Key-opinion-leader finder: per top-N hypothesis, find ONE US + ONE EU
+  # KOL by querying PubMed for the (target, disease) pair, aggregating
+  # authors by publication count, and applying affiliation preference:
+  #   US: Boston / Cambridge MA / Bay Area (SF, Stanford, Berkeley, PA)
+  #   EU: Belgium > Netherlands > France / Germany / Luxembourg > UK > other
+  # h-index pulled from Semantic Scholar's free Author API. Inspection-only
+  # (never changes ranking). Default top_n is small so first runs are fast;
+  # bump it when you want broader coverage. Uses NCBI_API_KEY env var
+  # automatically (10 req/s instead of 3).
+  enabled: false
+  top_n: 100
+  max_pmids_per_pair: 50         # how many recent papers to scan per pair
+  max_workers: 4
+  cache_dir: .cache/kol
+
 literature:
   # Two-pass enrichment: query PubMed / Europe PMC / ClinicalTrials.gov for the
   # top-N hypotheses after the initial score, attach counts and a normalised
