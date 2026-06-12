@@ -22,6 +22,8 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "substance_chembl_id", "substance
                "phylo_factor", "phylo_score", "phylo_n_models", "phylo_sources",
                "pathway_factor", "pathway_score", "n_pathway_overlap",
                "disease_gene_match", "severity_concern",
+               "combo_partner_1_name", "combo_partner_1_bridge_target", "combo_partner_1_synergy",
+               "combo_partner_2_name", "combo_partner_2_bridge_target", "combo_partner_2_synergy",
                "pubmed_count", "europepmc_count", "trial_count", "patent_count",
                "investigation_prior",
                "us_patients", "us_prevalence_per_100k", "is_orphan",
@@ -283,6 +285,19 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
     n_severe = (ranked["severity_concern"] == "severe_loF_agonist").sum()
     if n_severe:
         log(f"severity flag: damped {n_severe} 'receptor LoF + agonist' hypotheses")
+    # Combination-therapy companion finder: for each top-N primary hit, the
+    # best 1-2 mechanistically complementary partners.
+    if bool(cfg.get("combination", "enabled", default=True)):
+        # target_disease may have been loaded only in the pandas path; ensure
+        # it's available here for the duckdb engine too.
+        if 'target_disease' not in locals():
+            target_disease = loaders.load_target_disease(cfg.path("target_disease"))
+        ranked = steps.add_combination_partners(
+            ranked, direct_dt, target_disease, prep["substance_map"], cfg)
+        n_combo = (ranked["combo_partner_1_name"].fillna("") != "").sum()
+        if n_combo:
+            log(f"combination pass: found a complementary partner for "
+                f"{n_combo} of top {int(cfg.get('combination', 'top_n', default=100))} hypotheses")
     ranked = _maybe_literature_pass(ranked, cfg, prep, log)
     ranked = _maybe_kol_pass(ranked, cfg, log)
     ranked = _maybe_market_pass(ranked, cfg, log)

@@ -53,6 +53,17 @@ novelty:
   ontology_radius: 1
   soft: true
 
+combination:
+  # For each top-N primary (drug, disease) hit, find 1-2 companion drugs
+  # that bridge UNCOVERED disease targets and gain meaningful synergy under
+  # noisy-OR. Rejects same-class redundancy via target_overlap filter.
+  enabled: true
+  top_n: 200                  # only enrich the top primary hits
+  min_synergy: 0.1            # combo_mech - mech_primary threshold
+  max_target_overlap: 0.5     # reject candidates that share >50% of primary's targets
+  partners_per_hit: 2
+  partner_min_assoc: 0.3      # only count strong disease targets when scoring
+
 severity:
   # Damp 'receptor LoF + agonist' hypotheses: when disease_gene_match is
   # populated AND the disease name carries severity language (deficiency,
