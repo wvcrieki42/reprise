@@ -14,6 +14,7 @@ paths:
   target_expression: data/full/target_expression.csv      # from adapters.opentargets_target_expression
   disease_tissue:   data/full/disease_tissue.csv          # curated disease -> tissue map
   gene_info:        data/full/gene_info.csv               # from adapters.opentargets_gene_info
+  chembl_substance_map: data/full/chembl_substance_map.csv # from adapters.chembl_substance_map
   string_edges:     data/full/string_edges.csv            # from scripts/build_string_edges.py
   outdir:           output_full
 
@@ -35,6 +36,15 @@ propagation:
   min_assoc: 0.10
   aggregate: noisy_or
   top_targets_kept: 5
+
+substance_grouping:
+  # Collapse formulation variants (PIOGLITAZONE HYDROCHLORIDE -> PIOGLITAZONE,
+  # INSULIN HUMAN ZINC -> INSULIN HUMAN) up to ChEMBL's active-ingredient
+  # parent. Keeps the highest-opportunity row per (substance, disease) and
+  # records the variant names + count. Runs BEFORE literature / market passes
+  # so they query the substance, not each formulation.
+  enabled: true
+  collapse: true
 
 novelty:
   ontology_radius: 1
