@@ -56,9 +56,24 @@ tissue:
 scoring:
   w_mech: 1.0
   w_novelty: 1.0
+  w_investigation: 0.0         # 0 = report literature columns but don't damp opportunity
   promiscuity_penalty: true
   min_opportunity: 0.05        # tighter cut for the very large full-scale output
   top_n: 200000
+
+literature:
+  # Two-pass enrichment: query PubMed / Europe PMC / ClinicalTrials.gov for the
+  # top-N hypotheses after the initial score, attach counts and a normalised
+  # investigation_prior in [0, 1]. To actually re-rank by it, set
+  # scoring.w_investigation > 0 above.
+  enabled: false
+  top_n: 5000                  # only enrich the top 5k -- keeps API budget sane
+  cache_dir: .cache/literature
+  enable_pubmed: true
+  enable_europepmc: true
+  enable_clinicaltrials: true
+  max_workers: 4
+  # ncbi_api_key: "..."        # set to raise PubMed throughput from 3 to 10 req/s
 
 provenance:
   chembl_version: "34"
