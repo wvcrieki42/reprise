@@ -28,6 +28,10 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "substance_chembl_id", "substance
                "market_source", "as_of",
                "latest_patent_year", "latest_exclusivity_year", "loe_year",
                "has_generic", "n_nda", "n_anda",
+               "us_kol_name", "us_kol_institution", "us_kol_email",
+               "us_kol_h_index", "us_kol_n_pubs",
+               "eu_kol_name", "eu_kol_institution", "eu_kol_email",
+               "eu_kol_h_index", "eu_kol_n_pubs",
                "n_targets", "n_drug_targets", "opportunity",
                "evidence_targets", "data_version"]
 
@@ -72,6 +76,23 @@ def _maybe_literature_pass(ranked: pd.DataFrame, cfg: Config, prep: dict, log) -
         ranked = ranked.merge(dsyn, on="efo_id", how="left")
         ranked["disease_synonyms"] = ranked["disease_synonyms"].fillna("")
     return steps.add_literature_pass(ranked, lit, cfg)
+
+
+def _maybe_kol_pass(ranked: pd.DataFrame, cfg: Config, log) -> pd.DataFrame:
+    """One US + one EU KOL per top-N hypothesis, with affiliation/email/h-index."""
+    if not cfg.get("kol", "enabled", default=False):
+        return ranked
+    from .sources.kol import KOLClient
+    cache_dir = cfg.root / cfg.get("kol", "cache_dir", default=".cache/kol")
+    client = KOLClient(
+        cache_dir=cache_dir,
+        max_pmids_per_pair=int(cfg.get("kol", "max_pmids_per_pair", default=50)),
+        max_workers=int(cfg.get("kol", "max_workers", default=4)),
+    )
+    n = min(int(cfg.get("kol", "top_n", default=100)), len(ranked))
+    log(f"kol pass: querying top {n} of {len(ranked)} hypotheses "
+        f"(cache_dir={cache_dir})")
+    return steps.add_kol_pass(ranked, client, cfg)
 
 
 def _maybe_market_pass(ranked: pd.DataFrame, cfg: Config, log) -> pd.DataFrame:
@@ -253,6 +274,7 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
     ranked = ranked.merge(concord, on=["drug_id", "efo_id"], how="left")
     ranked["disease_gene_match"] = ranked["disease_gene_match"].fillna("")
     ranked = _maybe_literature_pass(ranked, cfg, prep, log)
+    ranked = _maybe_kol_pass(ranked, cfg, log)
     ranked = _maybe_market_pass(ranked, cfg, log)
     # FDA Orange Book ingredient match -- attach IP signals (patent expiry,
     # exclusivity expiry, generic availability) on the canonical substance_name.
