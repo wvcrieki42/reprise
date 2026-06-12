@@ -26,6 +26,8 @@ OUTPUT_COLS = ["rank", "drug_id", "drug_name", "substance_chembl_id", "substance
                "investigation_prior",
                "us_patients", "us_prevalence_per_100k", "is_orphan",
                "market_source", "as_of",
+               "latest_patent_year", "latest_exclusivity_year", "loe_year",
+               "has_generic", "n_nda", "n_anda",
                "n_targets", "n_drug_targets", "opportunity",
                "evidence_targets", "data_version"]
 
@@ -135,6 +137,12 @@ def _prepare(cfg: Config, log):
                        if pathway_on else
                        pd.DataFrame(columns=["target_symbol", "pathway_id",
                                               "pathway_name", "top_level"]))
+    ip_on = bool(cfg.get("ip", "enabled", default=False))
+    orange_book = (loaders.load_orange_book(cfg.path("orange_book"))
+                   if ip_on and cfg.get("paths", "orange_book", default=None) is not None
+                   else pd.DataFrame(columns=["ingredient", "latest_patent_year",
+                                              "latest_exclusivity_year", "loe_year",
+                                              "has_generic", "n_nda", "n_anda"]))
 
     universe = steps.build_universe(drugs, cfg)
     log(f"universe (approved US/EU): {len(universe)} drugs")
@@ -166,6 +174,7 @@ def _prepare(cfg: Config, log):
             "target_expression": target_expression, "disease_tissue": disease_tissue,
             "phylo_evidence": phylo_evidence, "substance_map": substance_map,
             "disease_synonyms": disease_synonyms, "target_pathways": target_pathways,
+            "orange_book": orange_book,
             "gene_info": gene_info, "known_exp": known_exp, "breadth": breadth,
             "direction_on": direction_on, "tissue_on": tissue_on, "phylo_on": phylo_on,
             "pathway_on": pathway_on}
@@ -244,6 +253,20 @@ def run(cfg: Config, *, verbose: bool = True) -> pd.DataFrame:
     ranked["disease_gene_match"] = ranked["disease_gene_match"].fillna("")
     ranked = _maybe_literature_pass(ranked, cfg, prep, log)
     ranked = _maybe_market_pass(ranked, cfg, log)
+    # FDA Orange Book ingredient match -- attach IP signals (patent expiry,
+    # exclusivity expiry, generic availability) on the canonical substance_name.
+    ob = prep.get("orange_book")
+    if ob is not None and not ob.empty:
+        from .sources.adapters import _normalize_ingredient
+        ranked = ranked.copy()
+        match_key = ranked["substance_name"].fillna("").apply(_normalize_ingredient) \
+            if "substance_name" in ranked.columns else \
+            ranked["drug_name"].fillna("").apply(_normalize_ingredient)
+        ranked["_match_key"] = match_key
+        ranked = ranked.merge(ob.rename(columns={"ingredient": "_match_key"}),
+                              on="_match_key", how="left").drop(columns=["_match_key"])
+        log(f"orange book: matched IP data for "
+            f"{ranked['latest_patent_year'].notna().sum()} of {len(ranked)} hypotheses")
     ranked = _finalize(ranked, cfg, prep)
     log(f"final ranked hypotheses: {len(ranked)}")
     return ranked
