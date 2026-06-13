@@ -185,6 +185,10 @@ The full pipeline source, configuration, curated CSVs, validation YAML, and this
 | Dabrafenib / Vemurafenib / Encorafenib | Binimetinib | cardiofaciocutaneous syndrome | MAP2K2 | 0.15 |
 | Follitropin (alfa / beta / delta) | Esterified estrogens | 46,XX gonadal dysgenesis | ESR2 | 0.11 |
 
+## Supplementary materials
+
+**Supplementary Fig. 1 — Example one-page collaboration brief** (`supplementary/supplementary_fig1_example_brief.pdf`). Auto-generated brief for the screen's top-ranked hypothesis, bromazepam → developmental and epileptic encephalopathy, exported by the `build_deal_memos.py --no-kol` profile used for blinded outreach. The brief weaves the mechanism evidence, the IP-runway signal, the orphan-prevalence opportunity, and a proposed investigator-initiated trial framework into a single A4 page. The same template generates briefs for any row of the 36-column output CSV.
+
 ## Acknowledgements
 
 This work was performed at BioBix (Department of Mathematical Modelling, Statistics and Bioinformatics, Ghent University, Belgium). We thank the Open Targets, ChEMBL, Reactome, EFO, STRING, IMPC, Orphanet, FDA Orange Book, PubMed, Europe PMC, ClinicalTrials.gov, and Lens.org teams for maintaining and openly releasing the data resources on which this work depends.

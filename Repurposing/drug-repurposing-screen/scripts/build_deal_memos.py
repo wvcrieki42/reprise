@@ -204,7 +204,8 @@ def _safe_filename(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s.strip())[:80] or "memo"
 
 
-def _render_memo(row: pd.Series, region: str, profile: dict, out_dir: Path) -> Path | None:
+def _render_memo(row: pd.Series, region: str, profile: dict, out_dir: Path,
+                 *, no_kol: bool = False) -> Path | None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
@@ -213,9 +214,12 @@ def _render_memo(row: pd.Series, region: str, profile: dict, out_dir: Path) -> P
                                     HRFlowable)
     from reportlab.lib import colors
 
-    salut, kol_body, kol_contact = _kol_paragraph(row, region)
-    if not salut:
-        return None  # Skip regions without a KOL
+    if no_kol:
+        salut, kol_body, kol_contact = "For clinical-collaborator outreach.", "", ""
+    else:
+        salut, kol_body, kol_contact = _kol_paragraph(row, region)
+        if not salut:
+            return None  # Skip regions without a KOL
 
     substance = _s(row.get("substance_name")) or _s(row.get("drug_name")) or "?"
     disease = _s(row.get("disease_name")) or "?"
@@ -257,10 +261,11 @@ def _render_memo(row: pd.Series, region: str, profile: dict, out_dir: Path) -> P
     story.append(Paragraph("Clinical opportunity", section))
     story.append(Paragraph(_market_paragraph(row), body))
 
-    story.append(Paragraph("Why you", section))
-    story.append(Paragraph(kol_body, body))
-    if kol_contact:
-        story.append(Paragraph(f"On record: <font face='Courier'>{kol_contact}</font>", body))
+    if kol_body:
+        story.append(Paragraph("Why you", section))
+        story.append(Paragraph(kol_body, body))
+        if kol_contact:
+            story.append(Paragraph(f"On record: <font face='Courier'>{kol_contact}</font>", body))
 
     story.append(Paragraph("What we propose", section))
     g = profile["group"]
@@ -311,6 +316,9 @@ def main():
     ap.add_argument("--pi-name", default=None)
     ap.add_argument("--pi-email", default=None)
     ap.add_argument("--group-name", default=None)
+    ap.add_argument("--no-kol", action="store_true",
+                    help="Skip KOL identification; emit one memo per top hypothesis "
+                         "with a generic salutation suitable for blinded outreach.")
     args = ap.parse_args()
 
     profile = _load_profile(Path(args.profile), {
@@ -322,29 +330,35 @@ def main():
         df = df[df["opportunity"] >= args.filter_min_opportunity]
     if args.orphan_only:
         df = df[df["is_orphan"] == True]
-    # We need at least one KOL on the selected side(s).
-    if args.region == "us":
-        df = df[df["us_kol_name"].fillna("") != ""]
-    elif args.region == "eu":
-        df = df[df["eu_kol_name"].fillna("") != ""]
-    else:
-        df = df[(df["us_kol_name"].fillna("") != "") |
-                (df["eu_kol_name"].fillna("") != "")]
+    if not args.no_kol:
+        # We need at least one KOL on the selected side(s).
+        if args.region == "us":
+            df = df[df["us_kol_name"].fillna("") != ""]
+        elif args.region == "eu":
+            df = df[df["eu_kol_name"].fillna("") != ""]
+        else:
+            df = df[(df["us_kol_name"].fillna("") != "") |
+                    (df["eu_kol_name"].fillna("") != "")]
     df = df.sort_values("opportunity", ascending=False).head(args.top)
 
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
     regions = ["us", "eu"] if args.region == "both" else [args.region]
+    if args.no_kol:
+        regions = regions[:1]  # one memo per hypothesis, region-agnostic
     written: list[Path] = []
     for _, row in df.iterrows():
         for region in regions:
-            p = _render_memo(row, region, profile, out_dir)
+            p = _render_memo(row, region, profile, out_dir, no_kol=args.no_kol)
             if p is not None:
                 written.append(p)
 
     print(f"wrote {len(written)} memos to {out_dir}")
     for p in written:
-        print(f"  {p.relative_to(ROOT)}")
+        try:
+            print(f"  {p.resolve().relative_to(ROOT)}")
+        except ValueError:
+            print(f"  {p}")
 
 
 if __name__ == "__main__":
