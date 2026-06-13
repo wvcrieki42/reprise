@@ -317,13 +317,33 @@ with tab_browse:
         ] if c in view.columns
     ]
 
-    n_with_brief = int((view.head(2000)["brief_url"] != "").sum()) if "brief_url" in view.columns else 0
-    if n_with_brief > 0:
-        st.success(
-            f":page_facing_up: **{n_with_brief}** of the visible rows ship with "
-            "a one-page PDF brief -- look for the **Brief** column (column 2). "
-            "Click 'open PDF' to read the full mechanism / IP / market rationale."
+    # --- Explicit fallback selector for the per-hit detail panel ---
+    # If the user's environment doesn't fire dataframe row-click events
+    # (some Streamlit versions / browser configs) this dropdown still works.
+    rows_with_brief = view[view["brief_url"] != ""].head(30) if "brief_url" in view.columns else view.head(0)
+    if not rows_with_brief.empty:
+        st.markdown("### Inspect a top hypothesis")
+        st.caption(
+            "Pick from the dropdown OR click any row / scatter point below. "
+            "The detail panel renders the chemical structure and embeds the "
+            "PDF brief inline."
         )
+        labels = [
+            f"#{int(r['rank']):>3}  {r['substance_name']} -> {r['disease_name']}"
+            for _, r in rows_with_brief.iterrows()
+        ]
+        index_map = list(rows_with_brief.index)
+        choice = st.selectbox(
+            "Hypothesis", options=["(none -- click row or scatter point below)"] + labels,
+            index=0, key="hyp_picker", label_visibility="collapsed",
+        )
+        if choice != "(none -- click row or scatter point below)":
+            picked_index = index_map[labels.index(choice)]
+            st.session_state["picker_index"] = int(picked_index)
+        else:
+            st.session_state["picker_index"] = None
+    else:
+        st.session_state["picker_index"] = None
 
     event = st.dataframe(
         view[display_cols].head(2000),
@@ -420,24 +440,26 @@ with tab_browse:
                 f"explore/compound/{chembl_id})"
             )
 
-        # ----- Chemical structure (rendered first, full width, no scrolling) ----
+        # ----- Chemical structure (sandboxed iframe -- bypasses every Streamlit
+        # HTML sanitiser, works across all versions and deploy modes) ----------
         if chembl_id.startswith("CHEMBL"):
             svg = fetch_chembl_structure(chembl_id)
             if svg:
-                svg_b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
-                # Markdown <img> with data: URI -- guaranteed to render in any
-                # Streamlit version / deploy mode.
-                st.markdown(
-                    f"<div style='background:white;display:inline-block;padding:8px;"
-                    f"border:1px solid #e0e0e0;border-radius:8px;margin-bottom:10px'>"
-                    f"<img src='data:image/svg+xml;base64,{svg_b64}' "
-                    f"style='width:320px;height:auto;display:block' "
-                    f"alt='Structure of {substance}'/>"
-                    f"<div style='text-align:center;font-size:11px;color:#555;"
-                    f"margin-top:4px'>2D structure (ChEMBL)</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
+                # Strip ChEMBL's fixed 500x500 dimensions and re-set so the
+                # SVG fits the iframe and centers cleanly.
+                svg_fit = re.sub(r"\swidth='[^']*'", " width='360'", svg, count=1)
+                svg_fit = re.sub(r"\sheight='[^']*'", " height='360'", svg_fit, count=1)
+                struct_html = (
+                    "<!doctype html><html><head><meta charset='utf-8'>"
+                    "<style>body{margin:0;display:flex;justify-content:center;"
+                    "align-items:center;background:#fff;font-family:system-ui}"
+                    ".box{border:1px solid #e0e0e0;border-radius:8px;padding:10px;"
+                    "background:#fff;text-align:center}"
+                    ".cap{font-size:11px;color:#666;margin-top:4px}</style></head>"
+                    f"<body><div class='box'>{svg_fit}"
+                    "<div class='cap'>2D structure (ChEMBL)</div></div></body></html>"
                 )
+                st.components.v1.html(struct_html, height=410, scrolling=False)
             else:
                 st.caption(
                     ":dna: _2D structure not available -- biologic or other "
@@ -522,12 +544,23 @@ with tab_browse:
                     f"synergy {float(row['combo_partner_2_synergy']):.2f})."
                 )
 
-        # Download button for the bundled PDF brief, if one exists
+        # Bundled PDF brief: inline iframe (sandboxed -- always renders) AND
+        # download button. iframe lets the user read the brief in place;
+        # download button is the fallback for browsers that block PDF iframes.
         substance_name = row.get("substance_name") or row.get("drug_name") or ""
         disease_name = row.get("disease_name") or ""
         brief_p = brief_path_for(substance_name, disease_name)
         if brief_p is not None:
             st.markdown("**One-page PDF brief**")
+            pdf_b64 = base64.b64encode(brief_p.read_bytes()).decode("ascii")
+            brief_html = (
+                "<!doctype html><html><body style='margin:0'>"
+                f"<iframe src='data:application/pdf;base64,{pdf_b64}' "
+                "style='width:100%;height:680px;border:1px solid #e0e0e0;"
+                "border-radius:6px' title='REPRISE brief'></iframe>"
+                "</body></html>"
+            )
+            st.components.v1.html(brief_html, height=720, scrolling=False)
             st.download_button(
                 label=f":page_facing_up: Download brief ({substance_name} -> {disease_name})",
                 data=brief_p.read_bytes(),
@@ -547,13 +580,14 @@ with tab_browse:
     # Both widgets share the same head(2000) view. customdata in plotly
     # carries the dataframe index so we can resolve it directly.
     # ------------------------------------------------------------------
-    selected_index = None
-    sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
-    if sc_pts:
-        p = sc_pts[0]
-        pos = p.get("point_index") if "point_index" in p else p.get("pointIndex")
-        if pos is not None and pos < len(scatter_view):
-            selected_index = int(scatter_view.iloc[pos]["_df_idx"])
+    selected_index = st.session_state.get("picker_index")
+    if selected_index is None:
+        sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
+        if sc_pts:
+            p = sc_pts[0]
+            pos = p.get("point_index") if "point_index" in p else p.get("pointIndex")
+            if pos is not None and pos < len(scatter_view):
+                selected_index = int(scatter_view.iloc[pos]["_df_idx"])
     if selected_index is None:
         sel = (event.selection or {}).get("rows") if hasattr(event, "selection") else []
         if sel:
@@ -561,10 +595,12 @@ with tab_browse:
 
     if selected_index is not None:
         st.divider()
+        st.markdown("## :pill: Hypothesis detail")
         render_brief(df.loc[selected_index])
     else:
-        st.info("Click any scatter point or table row above to see the full "
-                "mechanism / IP / market brief and download its PDF.")
+        st.info("Pick from the dropdown above, click any scatter point, or click "
+                "any table row to see the full mechanism / IP / market brief with "
+                "chemical structure and inline PDF.")
 
 
 # ======================================================================
