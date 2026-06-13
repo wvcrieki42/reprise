@@ -17,10 +17,17 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+import yaml
 
 DATA = Path(__file__).parent / "data" / "repurposing_hypotheses.parquet"
-BRIEFS_DIR = Path(__file__).parent / "briefs"
+VALIDATION_YAML = Path(__file__).parent / "data" / "repurposing_validation.yaml"
+BRIEFS_DIR = Path(__file__).parent / "static" / "briefs"
+# Streamlit serves files from dashboard/static/ at /app/static/<file> when
+# enableStaticServing = true (see .streamlit/config.toml). The relative URL
+# below works both locally and on Streamlit Community Cloud.
+BRIEFS_URL_PREFIX = "app/static/briefs/"
 PAPER_URL = "https://github.ugent.be/wvcrieki/repurposed"
 
 
@@ -39,6 +46,28 @@ def brief_path_for(substance: str, disease: str) -> Path | None:
 
 
 CHEMBL_IMG_URL = "https://www.ebi.ac.uk/chembl/api/data/image/{chembl_id}.svg"
+
+
+@st.cache_data(show_spinner=False)
+def load_repurposing_history() -> pd.DataFrame:
+    """Load the 54-case curated YAML as a DataFrame for the History tab."""
+    if not VALIDATION_YAML.exists():
+        return pd.DataFrame()
+    cases = yaml.safe_load(VALIDATION_YAML.read_text())["cases"]
+    rows = []
+    for c in cases:
+        rows.append({
+            "drug": c["drug"].title(),
+            "original": str(c.get("original_indication", "")).strip(),
+            "repurposed": str(c.get("repurposed_disease_name", "")).strip(),
+            "year": c.get("year_repurposed"),
+            "targets": ", ".join(c.get("mechanism_targets", []) or []),
+            "notes": c.get("notes", ""),
+        })
+    df = pd.DataFrame(rows)
+    df = df[df["year"].notna()].copy()
+    df["year"] = df["year"].astype(int)
+    return df
 
 
 @st.cache_data(show_spinner=False, ttl=24 * 3600)
@@ -95,12 +124,15 @@ def load_data() -> pd.DataFrame:
                 "investigation_prior", "pathway_score"):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-    # Pre-compute whether a bundled brief PDF exists for this hypothesis.
+    # Pre-compute a row-level link to the bundled PDF brief when one exists.
+    # The URL is relative to the Streamlit app root and uses the static-serving
+    # convention (config in .streamlit/config.toml). Empty string when missing.
     name_col = "substance_name" if "substance_name" in df.columns else "drug_name"
-    df["has_brief"] = [
-        brief_path_for(s, d) is not None
-        for s, d in zip(df[name_col].fillna(""), df["disease_name"].fillna(""))
-    ]
+    brief_urls = []
+    for s, d in zip(df[name_col].fillna(""), df["disease_name"].fillna("")):
+        p = brief_path_for(s, d)
+        brief_urls.append(BRIEFS_URL_PREFIX + p.name if p is not None else "")
+    df["brief_url"] = brief_urls
     # PubMed search URL per row -- non-empty only when count > 0 so the
     # LinkColumn renders blank for 0/NA rows and a clickable count for hits.
     if {"pubmed_count", "lead_target", "disease_name"} <= set(df.columns):
@@ -139,7 +171,11 @@ c5.metric("Backtest precision", "89%",
           help="48/54 known repurposings recovered, 95% CI 77-96%")
 
 
-tab_browse, tab_faq = st.tabs(["Browse hypotheses", "FAQ: how to read this dashboard"])
+tab_browse, tab_history, tab_faq = st.tabs([
+    "Browse hypotheses",
+    "History & how REPRISE adds value",
+    "FAQ: how to read this dashboard",
+])
 
 
 # ======================================================================
@@ -265,7 +301,7 @@ with tab_browse:
             "latest_patent_year", "has_generic",
             "pubmed_link", "trial_count", "patent_count", "investigation_prior",
             "combo_partner_1_name", "combo_partner_1_synergy",
-            "has_brief",
+            "brief_url",
         ] if c in view.columns
     ]
 
@@ -323,9 +359,13 @@ with tab_browse:
                      "primary substance misses."),
             "combo_partner_1_synergy": st.column_config.NumberColumn("Synergy", format="%.3f",
                 help="combo_mech_support - primary_mech_support under the noisy-OR."),
-            "has_brief": st.column_config.CheckboxColumn("Brief",
-                help="A bundled one-page PDF brief is available for this hypothesis. "
-                     "Click the row to download it from the detail panel below."),
+            "brief_url": st.column_config.LinkColumn(
+                "Brief",
+                help="One-page PDF brief: mechanism rationale, IP runway, "
+                     "clinical opportunity, and proposed collaboration model. "
+                     "Click to open in a new tab.",
+                display_text="open PDF",
+            ),
         },
         on_select="rerun",
         selection_mode="single-row",
@@ -358,16 +398,19 @@ with tab_browse:
                            f"explore/compound/{chembl_id})")
         with struct_col:
             if chembl_id.startswith("CHEMBL"):
+                st.markdown("**Chemical structure**")
                 svg = fetch_chembl_structure(chembl_id)
                 if svg:
-                    st.markdown("**Chemical structure**")
-                    st.markdown(
-                        f"<div style='max-width:340px; background:white; padding:6px; "
-                        f"border:1px solid #e0e0e0; border-radius:6px'>{svg}</div>",
-                        unsafe_allow_html=True,
+                    # components.html sandboxes the SVG inside an iframe so the
+                    # browser renders it reliably regardless of Streamlit's
+                    # markdown HTML sanitisation.
+                    html = (
+                        "<div style='background:white;padding:6px;border:1px solid "
+                        "#e0e0e0;border-radius:6px;display:flex;justify-content:center'>"
+                        + svg + "</div>"
                     )
+                    st.components.v1.html(html, height=340)
                 else:
-                    st.markdown("**Chemical structure**")
                     st.caption("_Not available -- biologic or other non-small-molecule "
                                "substance (ChEMBL has no 2D structure for this entry)._")
 
@@ -495,7 +538,208 @@ with tab_browse:
 
 
 # ======================================================================
-# Tab 2 -- FAQ
+# Tab 2 -- History & how REPRISE adds value
+# ======================================================================
+with tab_history:
+    st.header("Drug repurposing: how the industry got here")
+    st.markdown(
+        "Most landmark repurposings of the past forty years were **serendipitous** "
+        "-- a clinician noticed a side effect (sildenafil's vasodilation, "
+        "propranolol's effect on a haemangioma, minoxidil's hair-growth side "
+        "effect), an off-label experiment generated a positive trial signal "
+        "(metformin in PCOS, naltrexone in alcohol dependence), or a pre-clinical "
+        "screen revealed an unexpected cross-class activity (imatinib's KIT "
+        "binding, bortezomib's mantle-cell-lymphoma response). The list below "
+        "is a curated set of 54 historic wins drawn from FDA / EMA approvals and "
+        "well-established off-label uses, used both to validate REPRISE and to "
+        "make the historical pattern visible."
+    )
+
+    history = load_repurposing_history()
+    if history.empty:
+        st.info("Repurposing history dataset not bundled with this dashboard.")
+    else:
+        # ------------------------------------------------------------------
+        # Timeline
+        # ------------------------------------------------------------------
+        st.subheader("Timeline of 54 historic repurposings")
+        timeline = history.assign(
+            decade=(history["year"] // 10 * 10).astype(int).astype(str) + "s",
+            label=history["drug"] + " -> " + history["repurposed"].str.lower(),
+        ).sort_values("year")
+        fig_t = px.scatter(
+            timeline,
+            x="year",
+            y=[1] * len(timeline),
+            color="decade",
+            hover_data={
+                "drug": True, "original": True, "repurposed": True,
+                "targets": True, "notes": True,
+                "year": True, "decade": False,
+            },
+            labels={"x": "Year repurposed", "year": "Year repurposed"},
+        )
+        fig_t.update_traces(marker=dict(size=12, opacity=0.85,
+                                         line=dict(width=0.6, color="#333")))
+        fig_t.update_yaxes(visible=False, range=[0.8, 1.2])
+        fig_t.update_layout(
+            height=320,
+            xaxis=dict(dtick=5, showgrid=True, gridcolor="#eaeaea"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                        xanchor="right", x=1, title=""),
+            margin=dict(l=10, r=10, t=40, b=40),
+            plot_bgcolor="white",
+        )
+        st.plotly_chart(fig_t, use_container_width=True)
+        st.caption(
+            "Hover any point for the original indication, the repurposed use, "
+            "and the mechanism targets. The pace accelerates from the late 1990s "
+            "onwards -- mirroring the rise of systematic target-disease databases "
+            "(Open Targets, ChEMBL) that REPRISE now leverages."
+        )
+
+        # ------------------------------------------------------------------
+        # Disease-disease network bridged by repurposed drugs
+        # ------------------------------------------------------------------
+        st.subheader("Disease network linked by repurposed drugs")
+        st.markdown(
+            "Each **node is an indication**, each **edge is a drug** that "
+            "was repurposed from the original to the new use. Hub nodes "
+            "(hypertension, epilepsy, rheumatoid arthritis, schizophrenia, "
+            "depression) are the most fertile sources of repurposings -- a "
+            "structural observation REPRISE captures and extends "
+            "across the full disease ontology, not just the historic set."
+        )
+
+        import networkx as nx
+        G = nx.Graph()
+        for _, r in history.iterrows():
+            o = r["original"].split(" / ")[0].split(",")[0].strip().lower()
+            d = r["repurposed"].strip().lower()
+            if not o or not d or o == d:
+                continue
+            G.add_edge(o, d, drug=r["drug"], year=int(r["year"]))
+
+        if G.number_of_edges() == 0:
+            st.info("Network has no usable edges from the bundled YAML.")
+        else:
+            pos = nx.spring_layout(G, k=1.1, seed=7, iterations=80)
+            # edges
+            edge_x, edge_y, edge_hover = [], [], []
+            for u, v, attrs in G.edges(data=True):
+                x0, y0 = pos[u]; x1, y1 = pos[v]
+                edge_x += [x0, x1, None]
+                edge_y += [y0, y1, None]
+                edge_hover.append(f"{attrs['drug']} ({attrs['year']}): {u} -> {v}")
+            edge_trace = go.Scatter(
+                x=edge_x, y=edge_y, mode="lines",
+                line=dict(width=1.0, color="#bbb"),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+            # nodes -- size & color by degree (hubs stand out)
+            node_x, node_y, node_text, node_hover, node_size, node_color = [], [], [], [], [], []
+            for n in G.nodes():
+                x, y = pos[n]
+                node_x.append(x); node_y.append(y)
+                deg = G.degree(n)
+                node_size.append(10 + 6 * deg)
+                node_color.append(deg)
+                # label only the hubs (degree>=2) to avoid clutter
+                node_text.append(n if deg >= 2 else "")
+                drug_list = ", ".join(sorted({d["drug"] for _, _, d in G.edges(n, data=True)}))
+                node_hover.append(
+                    f"<b>{n}</b><br>degree (n drugs bridging it): {deg}"
+                    f"<br>drugs: {drug_list}"
+                )
+            node_trace = go.Scatter(
+                x=node_x, y=node_y, mode="markers+text",
+                text=node_text, textposition="top center",
+                textfont=dict(size=10),
+                hovertext=node_hover, hoverinfo="text",
+                marker=dict(
+                    size=node_size,
+                    color=node_color,
+                    colorscale="Plasma",
+                    showscale=True,
+                    colorbar=dict(title="Drugs bridging<br>this indication",
+                                  thickness=12, len=0.6),
+                    line=dict(width=1, color="#222"),
+                ),
+                showlegend=False,
+            )
+            fig_n = go.Figure(data=[edge_trace, node_trace])
+            fig_n.update_layout(
+                height=560,
+                showlegend=False,
+                hovermode="closest",
+                margin=dict(l=10, r=10, t=20, b=10),
+                plot_bgcolor="white",
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+            )
+            st.plotly_chart(fig_n, use_container_width=True)
+            st.caption(
+                "Hub indications (highlighted text, brighter colour) are sources "
+                "from which many drugs have been repurposed. Hypertension alone "
+                "spawned propranolol -> haemangioma & PTSD, eplerenone & "
+                "spironolactone & carvedilol -> heart failure, "
+                "verapamil -> migraine, prazosin -> PTSD, and minoxidil -> "
+                "alopecia."
+            )
+
+    st.divider()
+    st.subheader("How REPRISE is different and what it adds")
+    cmp1, cmp2 = st.columns(2)
+    with cmp1:
+        st.markdown("**Historic repurposing**")
+        st.markdown(
+            "- **Serendipitous.** A clinician noticed a side effect, an "
+            "off-label trial got lucky, a screen surfaced a cross-class hit.\n"
+            "- **Slow.** Median **decades** between original use and "
+            "FDA / EMA repurposed approval.\n"
+            "- **One drug at a time.** Each story was its own narrative.\n"
+            "- **Hit-driven only.** No systematic measurement of how often "
+            "the mechanistic case actually shows up in the literature; no "
+            "filter against crowded patent space; no orphan-prevalence "
+            "overlay.\n"
+            "- **No combination layer.** The BRAF + MEK doublet took years "
+            "of separate oncology trials to identify."
+        )
+    with cmp2:
+        st.markdown("**REPRISE adds**")
+        st.markdown(
+            "- **Systematic.** 3,996 approved drugs x 28,198 diseases "
+            "= 176,272 ranked hypotheses, recomputed in ~12 minutes on a "
+            "laptop.\n"
+            "- **Measured precision.** Validated against this same 54-case "
+            "set: **89% recovery (95% CI 77-96%)** at mech-support 0.30.\n"
+            "- **Mechanism-aware.** Scoring is a noisy-OR over drug-target x "
+            "target-disease evidence -- not a pattern match.\n"
+            "- **Layered for action.** Directionality (does the drug push the "
+            "target the way OT genetics predicts is therapeutic?), tissue, "
+            "pathway, IP runway, orphan-prevalence, literature & patent prior.\n"
+            "- **Combination companion finder.** Re-derives the BRAF + MEK "
+            "doublet *de novo* in cardiofaciocutaneous syndrome -- the same "
+            "combo already standard-of-care for BRAF V600E melanoma, without "
+            "prior cross-reference.\n"
+            "- **Operational output.** Per-hit one-page PDF brief that "
+            "translates a row of numbers into a narrative suitable for "
+            "clinical-collaborator outreach."
+        )
+
+    st.divider()
+    st.markdown(
+        "The point is **not to replace clinician judgement** but to compress "
+        "what used to be a decades-long serendipity loop into a recomputable "
+        "screen with measured precision and explicit regulatory / economic "
+        "context. Use the Browse tab to interrogate the 176,272-row output; "
+        "the FAQ tab for what every number means."
+    )
+
+
+# ======================================================================
+# Tab 3 -- FAQ
 # ======================================================================
 with tab_faq:
     st.header("FAQ -- how to read this dashboard")

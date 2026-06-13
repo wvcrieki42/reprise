@@ -1,8 +1,17 @@
 # REPRISE dashboard
 
-Public Streamlit companion to the REPRISE drug-repurposing screen. Browses
-the 176,272 ranked hypotheses interactively: filter by drug / disease / target,
-sort by opportunity, click a row to see the full mechanism / IP / market brief.
+Public Streamlit companion to the REPRISE drug-repurposing screen. Three tabs:
+
+1. **Browse hypotheses** -- the 176,272-row ranked output, sidebar filters,
+   opportunity-vs-mech scatter, click any point or row for the full per-hit
+   brief (mechanism evidence + IP runway + literature & patent prior +
+   clinical opportunity + chemical structure from ChEMBL + PubMed search
+   link + downloadable PDF).
+2. **History & how REPRISE adds value** -- timeline of the 54 historic
+   repurposing wins used to validate the screen, plus a disease-disease
+   network where edges are the drugs that bridge two indications.
+3. **FAQ** -- one expander per computed column with the actual formula,
+   honest caveats, and a one-paragraph paper TL;DR.
 
 ## Run locally
 
@@ -12,6 +21,9 @@ streamlit run dashboard/app.py
 ```
 
 Opens at http://localhost:8501.
+
+**Run from the repo root** so Streamlit picks up the `.streamlit/config.toml`
+(which enables static-file serving for the row-level brief links).
 
 ## Data snapshot
 

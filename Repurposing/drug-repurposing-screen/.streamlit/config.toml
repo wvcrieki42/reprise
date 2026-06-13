@@ -1,0 +1,4 @@
+[server]
+# Serves files in dashboard/static/ at /app/static/<filename>, so the
+# row-level brief LinkColumn can open the bundled PDFs directly.
+enableStaticServing = true
