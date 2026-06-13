@@ -29,9 +29,9 @@ FIG_DIR.mkdir(parents=True, exist_ok=True)
 # Figure 1: pipeline architecture (schematic)
 # ----------------------------------------------------------------------
 def fig1_architecture():
-    fig, ax = plt.subplots(figsize=(11, 7))
+    fig, ax = plt.subplots(figsize=(12, 7.5))
     ax.set_xlim(0, 12)
-    ax.set_ylim(0, 9)
+    ax.set_ylim(0, 9.5)
     ax.axis("off")
 
     def box(x, y, w, h, label, color="#E8EEF7", edge="#0B4FA8", fontsize=8.5):
@@ -47,68 +47,80 @@ def fig1_architecture():
                     arrowprops=dict(arrowstyle="-|>", color=color,
                                     lw=0.8, mutation_scale=10))
 
-    # Row 1 (top): data sources
+    # Row 1: data sources (8 items, evenly spaced)
     sources = ["ChEMBL", "Open Targets", "Reactome", "STRING", "EFO",
-               "Orange Book", "Orphanet", "PubMed / EuroPMC / NCT",
-               "Semantic Scholar"]
+               "Orange Book", "Orphanet", "PubMed / EuroPMC /\nNCT / Lens"]
+    n_src = len(sources)
+    src_w = 1.32
+    src_gap = (12.0 - n_src * src_w) / (n_src + 1)
     for i, s in enumerate(sources):
-        box(0.3 + 1.30 * i, 8.0, 1.20, 0.7, s, color="#F4ECDD",
-            edge="#A78343", fontsize=7.5)
+        x = src_gap + i * (src_w + src_gap)
+        box(x, 8.2, src_w, 0.85, s, color="#F4ECDD",
+            edge="#A78343", fontsize=7.8)
 
-    # Row 2: ingestion
-    box(0.5, 6.7, 11.0, 0.7, "Adapters + Loaders   (canonical CSV / parquet)",
+    # Row 2: ingestion bar
+    box(0.5, 7.0, 11.0, 0.65, "Adapters + Loaders   (canonical CSV / parquet)",
         color="#EFEFEF", edge="#888888", fontsize=9)
 
     # Row 3: mechanism scoring
-    box(4.2, 5.3, 3.6, 0.95,
+    box(4.2, 5.65, 3.6, 0.85,
         "Mechanism scoring\nnoisy-OR over drug-target $\\times$ target-disease",
         color="#D9E7FF", edge="#0B4FA8", fontsize=9)
 
-    # Row 4: enrichment layers (parallel)
+    # Row 4: enrichment layers (6 across)
     enrich = [("Novelty",  "#D9E7FF"),
               ("Direction","#D9E7FF"),
               ("Tissue",   "#D9E7FF"),
               ("Phylo",    "#D9E7FF"),
               ("Pathway",  "#D9E7FF"),
               ("Severity", "#FFE2DA")]
+    n_e = len(enrich)
+    e_w = 1.65
+    e_gap = (12.0 - n_e * e_w) / (n_e + 1)
     for i, (lbl, col) in enumerate(enrich):
-        box(0.3 + 2.0 * i, 4.0, 1.85, 0.7, lbl, color=col, edge="#0B4FA8",
+        x = e_gap + i * (e_w + e_gap)
+        box(x, 4.35, e_w, 0.70, lbl, color=col, edge="#0B4FA8",
             fontsize=8.5)
 
     # Row 5: scoring + ranking
-    box(2.5, 2.8, 7.0, 0.75,
+    box(2.5, 3.05, 7.0, 0.70,
         "Opportunity score $\\times$ active-ingredient grouping $\\to$ ranked output",
         color="#D9E7FF", edge="#0B4FA8", fontsize=9)
 
-    # Row 6: post-engine enrichment
-    post = [("Literature\nprior", "#FFF0D4"),
+    # Row 6: post-engine enrichment (4 items, KOL block removed)
+    post = [("Literature & patent\nprior", "#FFF0D4"),
             ("Market\n(curated + Orphanet)", "#FFF0D4"),
             ("FDA Orange\nBook IP", "#FFF0D4"),
-            ("KOL finder\n(US + EU)", "#FFF0D4"),
             ("Combination\ntherapy", "#FFF0D4")]
+    n_p = len(post)
+    p_w = 2.30
+    p_gap = (12.0 - n_p * p_w) / (n_p + 1)
     for i, (lbl, col) in enumerate(post):
-        box(0.3 + 2.36 * i, 1.5, 2.2, 0.85, lbl, color=col, edge="#B07C2F",
-            fontsize=8)
+        x = p_gap + i * (p_w + p_gap)
+        box(x, 1.75, p_w, 0.85, lbl, color=col, edge="#B07C2F",
+            fontsize=8.3)
 
     # Outputs
-    box(1.5, 0.2, 4.0, 0.7, "36-column ranked CSV", color="#E8F4DC",
+    box(1.5, 0.30, 4.0, 0.70, "36-column ranked CSV", color="#E8F4DC",
         edge="#3B7A22", fontsize=9.5)
-    box(6.5, 0.2, 4.0, 0.7, "Per-hypothesis PDF deal memos",
+    box(6.5, 0.30, 4.0, 0.70, "Per-hypothesis PDF briefs",
         color="#E8F4DC", edge="#3B7A22", fontsize=9.5)
 
-    # Arrows (selective, not every connection -- enough to convey flow)
-    arrow(6.0, 8.0, 6.0, 7.4)        # sources -> adapters
-    arrow(6.0, 6.7, 6.0, 6.25)       # adapters -> mechanism
-    arrow(6.0, 5.3, 6.0, 4.7)        # mechanism -> enrichment row
-    for i in range(6):
-        arrow(0.3 + 2.0 * i + 0.92, 4.0, 0.3 + 2.0 * i + 0.92, 3.55)  # enrich -> scoring
-    arrow(6.0, 2.8, 6.0, 2.35)       # scoring -> post-enrich
-    for i in range(5):
-        arrow(0.3 + 2.36 * i + 1.1, 1.5, 0.3 + 2.36 * i + 1.1, 0.9)   # post -> outputs
+    # Arrows (selective)
+    arrow(6.0, 8.2, 6.0, 7.7)        # sources -> adapters
+    arrow(6.0, 7.0, 6.0, 6.55)       # adapters -> mechanism
+    arrow(6.0, 5.65, 6.0, 5.10)      # mechanism -> enrichment row
+    for i in range(n_e):
+        x = e_gap + i * (e_w + e_gap) + e_w / 2
+        arrow(x, 4.35, x, 3.80)      # enrich -> scoring
+    arrow(6.0, 3.05, 6.0, 2.65)      # scoring -> post-enrich
+    for i in range(n_p):
+        x = p_gap + i * (p_w + p_gap) + p_w / 2
+        arrow(x, 1.75, x, 1.05)      # post -> outputs
 
-    ax.set_title("Pipeline architecture: end-to-end mechanism-driven drug repurposing screen",
-                 fontsize=11, color="#13294B")
-    plt.tight_layout()
+    fig.suptitle("Pipeline architecture: end-to-end mechanism-driven drug repurposing screen",
+                 fontsize=12, color="#13294B", y=0.985)
+    plt.subplots_adjust(top=0.93, bottom=0.02, left=0.02, right=0.98)
     out = FIG_DIR / "fig1_pipeline_architecture.png"
     plt.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -158,7 +170,7 @@ def fig2_backtest():
     df = _run_validation()
     df["label"] = df["drug"].str.title() + r" $\to$ " + df["disease"].str.lower()
     df = df.sort_values("mech")
-    fig, ax = plt.subplots(figsize=(9, 7))
+    fig, ax = plt.subplots(figsize=(10, 7.5))
     colors = {"HIT": "#2C7A2E", "MISS": "#C03A2B", "DISEASE_NOT_IN_OT": "#888888",
               "DRUG_NOT_FOUND": "#888888"}
     bar_colors = [colors[s] for s in df["status"]]
@@ -169,25 +181,29 @@ def fig2_backtest():
     ax.set_yticklabels(df["label"], fontsize=8)
     ax.set_xlabel("Mechanism support  (noisy-OR over drug-target $\\times$ target-disease)",
                   fontsize=10)
-    ax.set_xlim(0, 1.05)
+    ax.set_xlim(0, 1.10)
+    # Threshold line + rotated annotation along the line (avoids any bar overlap)
     ax.axvline(0.3, color="#444444", linestyle="--", linewidth=1.0)
-    ax.text(0.305, len(df) - 0.6, "HIT threshold = 0.30", fontsize=8,
-            color="#444444", va="center")
+    ax.text(0.295, len(df) / 2, "HIT threshold = 0.30", rotation=90,
+            fontsize=8.5, color="#444444", ha="right", va="center",
+            backgroundcolor="white")
     hit_n = (df.status == "HIT").sum()
     ax.set_title(f"Backtest validation: {hit_n} of {len(df)} curated known repurposing "
                  f"successes recovered  ({hit_n / len(df) * 100:.0f}% hit rate)",
-                 fontsize=10.5)
+                 fontsize=10.5, pad=12)
     legend_handles = [
         mpatches.Patch(color=colors["HIT"], label="HIT (mech_support >= 0.30)"),
         mpatches.Patch(color=colors["MISS"], label="MISS  (OT signal below threshold)"),
         mpatches.Patch(color=colors["DISEASE_NOT_IN_OT"],
                        label="OT data gap  (disease not in OT)"),
     ]
-    ax.legend(handles=legend_handles, loc="lower right", fontsize=8.5,
-              framealpha=0.95)
+    # Legend OUTSIDE the plot, below x-axis, to avoid any overlap
+    ax.legend(handles=legend_handles, loc="upper center",
+              bbox_to_anchor=(0.5, -0.10), ncol=3,
+              fontsize=8.5, framealpha=0.95, frameon=False)
     ax.grid(axis="x", linestyle=":", linewidth=0.5, alpha=0.6)
     ax.set_axisbelow(True)
-    plt.tight_layout()
+    plt.subplots_adjust(left=0.36, right=0.97, top=0.93, bottom=0.13)
     out = FIG_DIR / "fig2_backtest_validation.png"
     plt.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -200,15 +216,13 @@ def fig2_backtest():
 #   Panel B: direction-signal composition before/after the IMPC-source filter
 # ----------------------------------------------------------------------
 def fig3_engineering():
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
     # Panel A: severity damping effect
     df = pd.read_csv(ROOT / "output_full" / "repurposing_hypotheses.csv",
                      low_memory=False)
     flagged = df[df.severity_concern == "severe_loF_agonist"]
-    # Simulate pre-damping ranks: each flagged row's "natural" rank is what
-    # rank it would have had at its un-damped opportunity. Approximate by
-    # un-damping (opportunity / 0.3) and re-ranking against full output.
+    axA = axes[0]
     if not flagged.empty:
         full_opp = df["opportunity"].values
         un_damped = (flagged["opportunity"] / 0.3).values  # damp_factor = 0.7
@@ -218,22 +232,22 @@ def fig3_engineering():
             pre_ranks.append(int(np.searchsorted(-sorted_opp, -v) + 1))
         post_ranks = flagged["rank"].values
 
-        axA = axes[0]
-        axA.scatter(pre_ranks, post_ranks, color="#C03A2B", s=22,
-                    edgecolor="#5B1B14", linewidth=0.3, alpha=0.85)
-        axA.plot([1, 200000], [1, 200000], color="#888888", linestyle=":",
+        axA.scatter(pre_ranks, post_ranks, color="#C03A2B", s=28,
+                    edgecolor="#5B1B14", linewidth=0.4, alpha=0.85, zorder=3)
+        axA.plot([1, 300000], [1, 300000], color="#888888", linestyle=":",
                  linewidth=1, alpha=0.5, label="No movement (y=x)")
         axA.set_xscale("log")
         axA.set_yscale("log")
         axA.set_xlim(5, 300000)
         axA.set_ylim(5, 300000)
-        axA.set_xlabel("Rank without severity damping", fontsize=10)
-        axA.set_ylabel("Rank with severity damping", fontsize=10)
-        axA.set_title(f"A.  Severity heuristic relocates {len(flagged)} 'receptor LoF "
-                      f"+ agonist' hypotheses\nbelow rank 100",
-                      fontsize=10.5)
+        axA.set_xlabel("Rank without severity damping", fontsize=10.5)
+        axA.set_ylabel("Rank with severity damping", fontsize=10.5)
+        axA.set_title(f"A. Severity heuristic relocates "
+                      f"{len(flagged)} receptor-LoF + agonist hypotheses",
+                      fontsize=10.5, pad=12, loc="left")
         axA.axhline(100, color="#0B4FA8", linestyle="--", linewidth=1)
-        axA.text(7, 130, "Top-100 boundary", fontsize=8, color="#0B4FA8")
+        axA.text(12, 75, "Top-100 boundary", fontsize=8.5, color="#0B4FA8",
+                 va="top", backgroundcolor="white")
         axA.grid(linestyle=":", linewidth=0.4, alpha=0.6)
         axA.set_axisbelow(True)
 
@@ -242,22 +256,21 @@ def fig3_engineering():
     sources = ["IMPC\n(mouse KO)", "chembl", "eva\n(ClinVar)",
                "ot_genetics_\nportal", "gene_burden", "cancer_gene_\ncensus", "Other"]
     counts_before = [1_138_754, 639_068, 281_697, 166_292, 36_046, 34_164, 7_887]
-    kept_mask =    [False,       False,    True,    True,        True,    False,        True]   # what survived the filter
+    kept_mask =    [False,       False,    True,    True,        True,    False,        True]
     bar_colors_before = ["#C03A2B" if not k else "#2C7A2E" for k in kept_mask]
     x = np.arange(len(sources))
     axB.bar(x, counts_before, color=bar_colors_before,
             edgecolor="black", linewidth=0.4)
     axB.set_xticks(x)
-    axB.set_xticklabels(sources, fontsize=8)
-    axB.set_ylabel("Direction-informative evidence rows", fontsize=10)
+    axB.set_xticklabels(sources, fontsize=8.5)
+    axB.set_ylabel("Direction-informative evidence rows", fontsize=10.5)
     axB.set_yscale("log")
-    axB.set_ylim(1_000, 3_000_000)
-    axB.set_title("B.  Filtering non-human-genetics sources contracts "
-                  "direction signal\nfrom 1.02 M rows to 113 k "
-                  "(eliminates monogenic-disorder bias)",
-                  fontsize=10.5)
+    axB.set_ylim(1_000, 5_000_000)   # extra headroom for legend
+    axB.set_title("B. Filtering non-human-genetics sources contracts "
+                  "direction signal from 1.02 M to 113 k",
+                  fontsize=10.5, pad=12, loc="left")
     legend_handles = [
-        mpatches.Patch(color="#C03A2B", label="Excluded (not therapeutic-direction-informative)"),
+        mpatches.Patch(color="#C03A2B", label="Excluded (not direction-informative)"),
         mpatches.Patch(color="#2C7A2E", label="Retained (curated human genetics)"),
     ]
     axB.legend(handles=legend_handles, loc="upper right", fontsize=8.5,
@@ -265,7 +278,7 @@ def fig3_engineering():
     axB.grid(axis="y", linestyle=":", linewidth=0.4, alpha=0.6)
     axB.set_axisbelow(True)
 
-    plt.tight_layout()
+    plt.subplots_adjust(left=0.07, right=0.97, top=0.90, bottom=0.10, wspace=0.30)
     out = FIG_DIR / "fig3_engineering_choices.png"
     plt.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -276,100 +289,101 @@ def fig3_engineering():
 # Figure 4: BRAF+MEK rediscovery via combination-finder
 # ----------------------------------------------------------------------
 def fig4_combinations():
-    fig, axes = plt.subplots(1, 2, figsize=(13, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(15, 7))
 
-    # Panel A: combination network diagram
+    # ---- Panel A: combination network diagram ----
     axA = axes[0]
-    axA.set_xlim(-0.5, 5.5)
-    axA.set_ylim(-0.5, 5.5)
+    axA.set_xlim(-0.4, 6.0)
+    axA.set_ylim(-0.7, 6.5)
     axA.axis("off")
-    axA.set_title("A.  Combination-finder *de novo* rediscovery of the\n"
-                  "BRAF + MEK doublet (and KRAS + MEK analogue) for "
-                  "cardiofaciocutaneous syndrome",
-                  fontsize=10.5)
+    axA.set_title("A. De novo rediscovery of the BRAF + MEK "
+                  "(and KRAS + MEK) doublet\nin cardiofaciocutaneous syndrome",
+                  fontsize=10.5, pad=8, loc="left")
 
     def node(ax, x, y, label, color="#D9E7FF", edge="#0B4FA8", r=0.5,
              fontsize=9):
         circ = mpatches.Circle((x, y), r, facecolor=color, edgecolor=edge,
-                               linewidth=1.2)
+                               linewidth=1.2, zorder=3)
         ax.add_patch(circ)
         ax.text(x, y, label, ha="center", va="center", fontsize=fontsize,
-                color="#13294B", weight="bold")
+                color="#13294B", weight="bold", zorder=4)
 
-    # Primary nodes (BRAF inhibitors + KRAS inhibitors)
+    # Layout: primaries on left column at y=0..4, disease center-top y=5.5,
+    # bridge target center y=2.5, companions on right column.
     primaries = [
-        ("Dabrafenib", 0.4, 4.5),
-        ("Vemurafenib", 0.4, 3.5),
-        ("Encorafenib", 0.4, 2.5),
-        ("Sotorasib",  0.4, 1.5),
-        ("Adagrasib",  0.4, 0.5),
+        ("Dabrafenib", 0.5, 4.5),
+        ("Vemurafenib", 0.5, 3.5),
+        ("Encorafenib", 0.5, 2.5),
+        ("Sotorasib",  0.5, 1.5),
+        ("Adagrasib",  0.5, 0.5),
     ]
     for name, x, y in primaries:
         node(axA, x, y, name, color="#FFE2DA", edge="#B23A20", r=0.46,
              fontsize=8.5)
 
-    # Disease node (center-top)
-    node(axA, 2.7, 5.0, "CFC\nsyndrome", color="#E8F4DC", edge="#3B7A22",
-         r=0.62, fontsize=9.5)
+    # Disease node (center-top, with extra vertical spacing from labels)
+    node(axA, 3.0, 5.7, "CFC\nsyndrome", color="#E8F4DC", edge="#3B7A22",
+         r=0.6, fontsize=9.5)
 
     # Bridge target
-    node(axA, 2.7, 2.5, "MAP2K1 /\nMAP2K2", color="#FFF0D4", edge="#B07C2F",
-         r=0.62, fontsize=9)
+    node(axA, 3.0, 2.5, "MAP2K1 /\nMAP2K2", color="#FFF0D4", edge="#B07C2F",
+         r=0.6, fontsize=8.8)
 
     # Companion drugs (MEK inhibitors)
-    node(axA, 5.0, 3.4, "Binimetinib", color="#D9E7FF", edge="#0B4FA8",
+    node(axA, 5.4, 3.4, "Binimetinib", color="#D9E7FF", edge="#0B4FA8",
          r=0.55, fontsize=9)
-    node(axA, 5.0, 1.6, "Cobimetinib", color="#D9E7FF", edge="#0B4FA8",
+    node(axA, 5.4, 1.6, "Cobimetinib", color="#D9E7FF", edge="#0B4FA8",
          r=0.55, fontsize=9)
 
-    # Edges
     def edge(x0, y0, x1, y1, color="#666666", w=0.6, ls="-"):
-        axA.plot([x0, x1], [y0, y1], color=color, linewidth=w, linestyle=ls)
+        axA.plot([x0, x1], [y0, y1], color=color, linewidth=w, linestyle=ls,
+                 zorder=1)
 
     for _, x, y in primaries:
-        edge(x + 0.4, y, 2.7, 4.45, color="#B23A20", w=0.6)         # primary -> disease
-        edge(x + 0.4, y, 2.1, 2.55, color="#888888", w=0.5, ls=":")  # primary -> bridge
-    edge(3.3, 2.55, 4.5, 3.35, color="#0B4FA8", w=0.7)
-    edge(3.3, 2.55, 4.5, 1.65, color="#0B4FA8", w=0.7)
-    # Disease <- bridge
-    edge(2.7, 3.12, 2.7, 4.4, color="#3B7A22", w=0.6, ls=":")
+        edge(x + 0.4, y, 2.4, 5.65, color="#B23A20", w=0.6)
+        edge(x + 0.4, y, 2.4, 2.55, color="#888888", w=0.5, ls=":")
+    edge(3.6, 2.55, 4.85, 3.35, color="#0B4FA8", w=0.7)
+    edge(3.6, 2.55, 4.85, 1.65, color="#0B4FA8", w=0.7)
+    edge(3.0, 3.10, 3.0, 5.10, color="#3B7A22", w=0.6, ls=":")
 
-    # Labels
-    axA.text(0.4, 5.15, "Primary substances", fontsize=8.5, ha="center",
+    # Group labels (italic, well clear of nodes and title)
+    axA.text(0.5, -0.4, "Primary substances", fontsize=8.5, ha="center",
              color="#5B1B14", style="italic")
-    axA.text(5.0, 4.05, "Companion drugs", fontsize=8.5, ha="center",
+    axA.text(5.4, -0.4, "Companion MEK inhibitors", fontsize=8.5, ha="center",
              color="#0B4FA8", style="italic")
-    axA.text(2.7, 1.78, "bridge target", fontsize=7.5, ha="center",
+    axA.text(3.0, 1.55, "bridge target", fontsize=7.8, ha="center",
              color="#705221", style="italic")
 
-    # Panel B: top combination synergies bar chart
+    # ---- Panel B: top combination synergies bar chart ----
     axB = axes[1]
     combos = [
-        ("Bromazepam + Orphenadrine\n$\\to$ developmental and epileptic\nencephalopathy", 0.48),
-        ("Setmelanotide + Metformin\n$\\to$ T2D (via NDUFAB1,\nmetformin's complex-I site)", 0.49),
-        ("Pinacidil/Minoxidil + Vernakalant\n$\\to$ familial atrial fibrillation", 0.26),
+        ("Setmelanotide + Metformin\n$\\to$ T2D (NDUFAB1, complex-I bridge)", 0.49),
+        ("Bromazepam + Orphenadrine\n$\\to$ developmental and epileptic encephalopathy", 0.48),
+        ("Afamelanotide + Mequinol\n$\\to$ oculocutaneous albinism type 6", 0.33),
+        ("Pinacidil / Minoxidil + Vernakalant\n$\\to$ familial atrial fibrillation", 0.26),
         ("Angiotensin II + Aliskiren\n$\\to$ renal tubular dysgenesis", 0.21),
-        ("Sotorasib/Adagrasib + Binimetinib\n$\\to$ cardiofaciocutaneous syndrome", 0.17),
-        ("Dabrafenib/Vemurafenib/Encorafenib\n+ Binimetinib $\\to$ CFC syndrome", 0.15),
+        ("Sotorasib / Adagrasib + Binimetinib\n$\\to$ cardiofaciocutaneous syndrome", 0.17),
+        ("Dabrafenib / Vemurafenib / Encorafenib\n+ Binimetinib $\\to$ CFC syndrome", 0.15),
         ("Follitropin + Esterified estrogens\n$\\to$ 46,XX gonadal dysgenesis", 0.11),
     ]
     labels = [c[0] for c in combos]
     syn = [c[1] for c in combos]
     y = np.arange(len(combos))
     axB.barh(y, syn, color="#0B4FA8", edgecolor="black", linewidth=0.4,
-             height=0.65, alpha=0.85)
+             height=0.7, alpha=0.85)
     axB.set_yticks(y)
-    axB.set_yticklabels(labels, fontsize=7.8)
+    axB.set_yticklabels(labels, fontsize=8)
     axB.invert_yaxis()
     axB.set_xlabel("Synergy  (combo mech_support $-$ primary mech_support)",
-                   fontsize=10)
+                   fontsize=10.5)
     axB.set_xlim(0, 0.55)
-    axB.set_title("B.  Top combination-therapy synergies\nin the screen's top 200 primary hypotheses",
-                  fontsize=10.5)
+    axB.set_title("B. Top combination-therapy synergies in the screen's "
+                  "top 200 primary hypotheses",
+                  fontsize=10.5, pad=12, loc="left")
     axB.grid(axis="x", linestyle=":", linewidth=0.4, alpha=0.6)
     axB.set_axisbelow(True)
 
-    plt.tight_layout()
+    plt.subplots_adjust(left=0.04, right=0.97, top=0.92, bottom=0.06, wspace=0.40)
     out = FIG_DIR / "fig4_combinations.png"
     plt.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
