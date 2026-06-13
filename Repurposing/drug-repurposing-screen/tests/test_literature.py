@@ -367,6 +367,90 @@ def test_two_pass_zero_weight_is_inspection_only(tmp_path):
     assert top_k["investigation_prior"].notna().all()
 
 
+# ----------------------------------------------------------------------
+# Extended Lens-only coverage (lens_top_n > top_n)
+# ----------------------------------------------------------------------
+def test_only_sources_restricts_to_named_sources(tmp_path):
+    """score_pairs(only_sources={'lens'}) hits only the Lens fetcher and
+    populates only patent_count + investigation_prior."""
+    seen = []
+
+    def fake(source, query):
+        seen.append(source)
+        return 7
+
+    c = _client(tmp_path, fake, enable_lens=True, lens_api_token="t")
+    out = c.score_pairs(_pairs().head(1), only_sources={"lens"})
+    assert set(seen) == {"lens"}, f"expected lens-only, got {set(seen)}"
+    row = out.iloc[0]
+    assert int(row["patent_count"]) == 7
+    assert pd.isna(row["pubmed_count"])
+    assert pd.isna(row["europepmc_count"])
+    assert pd.isna(row["trial_count"])
+    # investigation_prior is computed from the Lens count alone
+    assert 0 < row["investigation_prior"] <= 1
+
+
+def _cfg_with_lens_extension(top_n=3, lens_top_n=5, w_inv=0.8):
+    return Config(
+        raw={"literature": {"top_n": top_n, "lens_top_n": lens_top_n},
+             "scoring": {"w_investigation": w_inv}},
+        root=Path("."),
+    )
+
+
+def test_lens_top_n_extends_patent_coverage(tmp_path):
+    """With lens_top_n > top_n, Lens fires for rows beyond top_n but the
+    cheap sources (PubMed / EPMC / NCT) do NOT."""
+    calls = []
+
+    def fake(source, query):
+        calls.append((source, query))
+        # any non-zero count is fine for the assertion
+        return 50
+
+    client = _client(tmp_path, fake, enable_lens=True,
+                     lens_api_token="fake-token-for-test")
+    out = steps.add_literature_pass(_ranked(), client,
+                                    _cfg_with_lens_extension(top_n=3,
+                                                             lens_top_n=5,
+                                                             w_inv=0.0))
+    sources_by_target = {}
+    for source, query in calls:
+        for t in ("TGT_HOT", "TGT_COLD", "TGT_MID", "TGT_X", "TGT_Y"):
+            if t in query:
+                sources_by_target.setdefault(t, set()).add(source)
+    # Top-3 targets get all four sources
+    for t in ("TGT_HOT", "TGT_COLD", "TGT_MID"):
+        assert {"pubmed", "europepmc", "clinicaltrials", "lens"} <= sources_by_target[t], \
+            f"{t} only saw {sources_by_target.get(t)}"
+    # Extended targets get LENS ONLY -- the cheap sources stay capped at top_n
+    for t in ("TGT_X", "TGT_Y"):
+        assert sources_by_target[t] == {"lens"}, \
+            f"{t} should be lens-only past top_n, got {sources_by_target.get(t)}"
+    # And patent_count is populated for the extended rows
+    ext = out[out.drug_id.isin(["D4", "D5"])]
+    assert ext["patent_count"].notna().all()
+    # investigation_prior also populated for the extended rows (Lens signal only)
+    assert ext["investigation_prior"].notna().all()
+
+
+def test_lens_top_n_default_equals_top_n(tmp_path):
+    """Omitting lens_top_n -> behaves identically to the legacy single-pass."""
+    seen_targets = set()
+
+    def fake(source, query):
+        for t in ("TGT_HOT", "TGT_COLD", "TGT_MID", "TGT_X", "TGT_Y"):
+            if t in query:
+                seen_targets.add(t)
+        return 10
+
+    client = _client(tmp_path, fake, enable_lens=True, lens_api_token="t")
+    steps.add_literature_pass(_ranked(), client, _cfg(top_n=3))
+    assert seen_targets == {"TGT_HOT", "TGT_COLD", "TGT_MID"}, \
+        f"Lens leaked past top_n when lens_top_n was unset: {seen_targets}"
+
+
 if __name__ == "__main__":
     import tempfile
     for name, fn in list(globals().items()):
