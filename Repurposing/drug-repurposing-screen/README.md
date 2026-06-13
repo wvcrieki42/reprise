@@ -75,6 +75,14 @@ make full
 - `output/repurposing_hypotheses.csv`
 - `output/run_metadata.json`
 
+## Web dashboard
+Browse the ranked hypotheses interactively:
+```bash
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
+```
+See `dashboard/README.md` for deployment to Streamlit Community Cloud.
+
 ## Latest demo verification
 Most recent local validation run:
 

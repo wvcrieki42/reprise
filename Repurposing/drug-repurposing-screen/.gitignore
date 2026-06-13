@@ -7,3 +7,6 @@ data/full/
 *.sqlite
 *.db
 .DS_Store
+
+# Dashboard data snapshot is checked in deliberately as the paper companion
+!dashboard/data/repurposing_hypotheses.parquet
