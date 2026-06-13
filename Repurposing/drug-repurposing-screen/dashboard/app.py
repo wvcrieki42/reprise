@@ -295,15 +295,22 @@ with tab_browse:
 
     display_cols = [
         c for c in [
-            "rank", "substance_name", "disease_name", "lead_target",
+            "rank", "brief_url", "substance_name", "disease_name", "lead_target",
             "opportunity", "mechanistic_support", "novelty", "direction_status",
             "tissue_status", "is_orphan", "us_patients",
             "latest_patent_year", "has_generic",
             "pubmed_link", "trial_count", "patent_count", "investigation_prior",
             "combo_partner_1_name", "combo_partner_1_synergy",
-            "brief_url",
         ] if c in view.columns
     ]
+
+    n_with_brief = int((view.head(2000)["brief_url"] != "").sum()) if "brief_url" in view.columns else 0
+    if n_with_brief > 0:
+        st.success(
+            f":page_facing_up: **{n_with_brief}** of the visible rows ship with "
+            "a one-page PDF brief -- look for the **Brief** column (column 2). "
+            "Click 'open PDF' to read the full mechanism / IP / market rationale."
+        )
 
     event = st.dataframe(
         view[display_cols].head(2000),
@@ -360,11 +367,14 @@ with tab_browse:
             "combo_partner_1_synergy": st.column_config.NumberColumn("Synergy", format="%.3f",
                 help="combo_mech_support - primary_mech_support under the noisy-OR."),
             "brief_url": st.column_config.LinkColumn(
-                "Brief",
+                ":page_facing_up: Brief",
                 help="One-page PDF brief: mechanism rationale, IP runway, "
                      "clinical opportunity, and proposed collaboration model. "
-                     "Click to open in a new tab.",
+                     "Click to open in a new tab. Bundled for the top-30 "
+                     "ranked hypotheses; empty for the rest.",
                 display_text="open PDF",
+                pinned=True,
+                width="small",
             ),
         },
         on_select="rerun",
