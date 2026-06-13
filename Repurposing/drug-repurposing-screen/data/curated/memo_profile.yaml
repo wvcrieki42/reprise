@@ -35,5 +35,6 @@ next_step:
 footer_disclaimer: |
   This memo was auto-generated from the BioBix repurposing screen
   (Open Targets + ChEMBL + Reactome + FDA Orange Book + Orphanet + PubMed
-  + Semantic Scholar). Figures are computational priors, not clinical
-  recommendations. Confidential -- for the named recipient only.
+  + Europe PMC + ClinicalTrials.gov + Lens.org). Figures are computational
+  priors, not clinical recommendations. Confidential -- for the named
+  recipient only.
