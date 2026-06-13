@@ -196,6 +196,55 @@ tab_browse, tab_history, tab_faq = st.tabs([
 # ======================================================================
 with tab_browse:
     # ------------------------------------------------------------------
+    # Quick preview -- always-visible top hit so the user immediately sees
+    # whether structure rendering and brief downloads work in their env,
+    # without any selection / click required.
+    # ------------------------------------------------------------------
+    top_row = df.iloc[0] if len(df) else None
+    if top_row is not None:
+        with st.expander(":eyes: Quick preview of the top-ranked hypothesis "
+                          f"({top_row['substance_name']} -> {top_row['disease_name']})",
+                          expanded=True):
+            pc1, pc2 = st.columns([2, 3])
+            cid = str(top_row.get("substance_chembl_id") or "")
+            with pc1:
+                if cid.startswith("CHEMBL"):
+                    svg = fetch_chembl_structure(cid)
+                    if svg:
+                        svg_fit = re.sub(r"\swidth='[^']*'", " width='300'", svg, count=1)
+                        svg_fit = re.sub(r"\sheight='[^']*'", " height='300'", svg_fit, count=1)
+                        st.html(
+                            "<div style='border:1px solid #e0e0e0;border-radius:8px;"
+                            "padding:8px;background:#fff;display:inline-block;"
+                            f"text-align:center'>{svg_fit}"
+                            "<div style='font-size:11px;color:#666;margin-top:4px'>"
+                            f"2D structure of {top_row['substance_name']} (ChEMBL)"
+                            "</div></div>"
+                        )
+                    else:
+                        st.caption("Structure not available (biologic).")
+            with pc2:
+                st.markdown(f"**Rank #{int(top_row['rank'])}** -- "
+                            f"opportunity **{top_row['opportunity']:.3f}**, "
+                            f"mech support **{top_row['mechanistic_support']:.3f}**, "
+                            f"lead target **{top_row['lead_target']}**.")
+                brief_p = brief_path_for(top_row["substance_name"], top_row["disease_name"])
+                if brief_p is not None:
+                    st.download_button(
+                        label=":page_facing_up: Download the one-page PDF brief",
+                        data=brief_p.read_bytes(),
+                        file_name=brief_p.name,
+                        mime="application/pdf",
+                        key="dl_preview",
+                        type="primary",
+                    )
+                    st.caption(
+                        "The same PDF is also available via the **Inspect a top "
+                        "hypothesis** picker below, or by clicking any of the top-30 "
+                        "ranked rows in the table."
+                    )
+
+    # ------------------------------------------------------------------
     # Sidebar filters (shared, but only meaningful while Browse is active)
     # ------------------------------------------------------------------
     st.sidebar.header("Filters")
@@ -440,26 +489,21 @@ with tab_browse:
                 f"explore/compound/{chembl_id})"
             )
 
-        # ----- Chemical structure (sandboxed iframe -- bypasses every Streamlit
-        # HTML sanitiser, works across all versions and deploy modes) ----------
+        # ----- Chemical structure (st.html: same DOM as the page, no
+        # iframe sandbox, no markdown sanitisation, works across deploy modes)
         if chembl_id.startswith("CHEMBL"):
             svg = fetch_chembl_structure(chembl_id)
             if svg:
-                # Strip ChEMBL's fixed 500x500 dimensions and re-set so the
-                # SVG fits the iframe and centers cleanly.
                 svg_fit = re.sub(r"\swidth='[^']*'", " width='360'", svg, count=1)
                 svg_fit = re.sub(r"\sheight='[^']*'", " height='360'", svg_fit, count=1)
-                struct_html = (
-                    "<!doctype html><html><head><meta charset='utf-8'>"
-                    "<style>body{margin:0;display:flex;justify-content:center;"
-                    "align-items:center;background:#fff;font-family:system-ui}"
-                    ".box{border:1px solid #e0e0e0;border-radius:8px;padding:10px;"
-                    "background:#fff;text-align:center}"
-                    ".cap{font-size:11px;color:#666;margin-top:4px}</style></head>"
-                    f"<body><div class='box'>{svg_fit}"
-                    "<div class='cap'>2D structure (ChEMBL)</div></div></body></html>"
+                st.html(
+                    "<div style='border:1px solid #e0e0e0;border-radius:8px;"
+                    "padding:10px;background:#fff;display:inline-block;"
+                    "text-align:center;margin-bottom:10px'>"
+                    f"{svg_fit}"
+                    "<div style='font-size:11px;color:#666;margin-top:4px'>"
+                    "2D structure (ChEMBL)</div></div>"
                 )
-                st.components.v1.html(struct_html, height=410, scrolling=False)
             else:
                 st.caption(
                     ":dna: _2D structure not available -- biologic or other "
@@ -544,29 +588,22 @@ with tab_browse:
                     f"synergy {float(row['combo_partner_2_synergy']):.2f})."
                 )
 
-        # Bundled PDF brief: inline iframe (sandboxed -- always renders) AND
-        # download button. iframe lets the user read the brief in place;
-        # download button is the fallback for browsers that block PDF iframes.
+        # Bundled PDF brief -- st.download_button is the most reliable Streamlit
+        # primitive (works on every version, every deploy mode, every browser).
+        # PDF iframes via data: URI are widely blocked by browser sandboxes,
+        # so we drop the inline preview attempt and just offer the download.
         substance_name = row.get("substance_name") or row.get("drug_name") or ""
         disease_name = row.get("disease_name") or ""
         brief_p = brief_path_for(substance_name, disease_name)
         if brief_p is not None:
             st.markdown("**One-page PDF brief**")
-            pdf_b64 = base64.b64encode(brief_p.read_bytes()).decode("ascii")
-            brief_html = (
-                "<!doctype html><html><body style='margin:0'>"
-                f"<iframe src='data:application/pdf;base64,{pdf_b64}' "
-                "style='width:100%;height:680px;border:1px solid #e0e0e0;"
-                "border-radius:6px' title='REPRISE brief'></iframe>"
-                "</body></html>"
-            )
-            st.components.v1.html(brief_html, height=720, scrolling=False)
             st.download_button(
-                label=f":page_facing_up: Download brief ({substance_name} -> {disease_name})",
+                label=f":page_facing_up: Download the {substance_name} -> {disease_name} brief (PDF)",
                 data=brief_p.read_bytes(),
                 file_name=brief_p.name,
                 mime="application/pdf",
                 key=f"dl_{brief_p.name}",
+                type="primary",
             )
         else:
             st.caption("_No bundled PDF brief for this hypothesis -- regenerate via "
