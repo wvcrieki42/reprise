@@ -27,7 +27,7 @@ BRIEFS_DIR = Path(__file__).parent / "static" / "briefs"
 # Streamlit serves files from dashboard/static/ at /app/static/<file> when
 # enableStaticServing = true (see .streamlit/config.toml). The relative URL
 # below works both locally and on Streamlit Community Cloud.
-BRIEFS_URL_PREFIX = "app/static/briefs/"
+BRIEFS_URL_PREFIX = "/app/static/briefs/"
 PAPER_URL = "https://github.ugent.be/wvcrieki/repurposed"
 
 
@@ -401,15 +401,15 @@ with tab_browse:
                 st.markdown("**Chemical structure**")
                 svg = fetch_chembl_structure(chembl_id)
                 if svg:
-                    # components.html sandboxes the SVG inside an iframe so the
-                    # browser renders it reliably regardless of Streamlit's
-                    # markdown HTML sanitisation.
-                    html = (
-                        "<div style='background:white;padding:6px;border:1px solid "
-                        "#e0e0e0;border-radius:6px;display:flex;justify-content:center'>"
-                        + svg + "</div>"
-                    )
-                    st.components.v1.html(html, height=340)
+                    # Strip the SVG's fixed pixel dimensions so the browser
+                    # scales it to whatever Streamlit's image renderer gives
+                    # us (st.image's width arg below). The viewBox stays
+                    # intact, so the geometry is preserved.
+                    svg_scaled = re.sub(r"\swidth='[^']*'", "", svg, count=1)
+                    svg_scaled = re.sub(r"\sheight='[^']*'", "", svg_scaled, count=1)
+                    # st.image accepts an SVG XML string directly (Streamlit
+                    # >= 1.30) and renders it inline -- no iframe needed.
+                    st.image(svg_scaled, width=320)
                 else:
                     st.caption("_Not available -- biologic or other non-small-molecule "
                                "substance (ChEMBL has no 2D structure for this entry)._")
