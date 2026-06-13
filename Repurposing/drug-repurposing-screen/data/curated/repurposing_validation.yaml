@@ -166,3 +166,289 @@ cases:
     mechanism_targets: [TUBB1, NLRP3]
     year_repurposed: 1987
     notes: Microtubule disruption / NLRP3 inhibition.
+
+  # ----------------------------------------------------------------------
+  # Extension set (added 2026-06): 35 additional well-documented FDA / EMA
+  # repurposings spanning oncology, cardiometabolic, neuro/psych, immunology,
+  # and rare disease. Targets are the canonical mechanism-of-action
+  # entries; EFO ids verified present in the OT 24.06 target_disease join.
+  # ----------------------------------------------------------------------
+  - drug: IMATINIB
+    original_indication: chronic myeloid leukemia
+    repurposed_disease_name: gastrointestinal stromal tumor
+    repurposed_disease_efo: MONDO_0011719
+    mechanism_targets: [KIT, PDGFRA]
+    year_repurposed: 2002
+    notes: BCR-ABL inhibitor; cross-activity on KIT/PDGFRA enabled the GIST franchise.
+
+  - drug: TAMOXIFEN
+    original_indication: metastatic breast cancer
+    repurposed_disease_name: breast carcinoma
+    repurposed_disease_efo: EFO_0000305
+    mechanism_targets: [ESR1, ESR2]
+    year_repurposed: 1998
+    notes: SERM; first agent FDA-approved for breast-cancer chemoprevention (NSABP P-1).
+
+  - drug: BEVACIZUMAB
+    original_indication: metastatic colorectal cancer
+    repurposed_disease_name: wet macular degeneration
+    repurposed_disease_efo: EFO_0004683
+    mechanism_targets: [VEGFA]
+    year_repurposed: 2005
+    notes: Avastin's off-label intravitreal use predates and parallels ranibizumab.
+
+  - drug: ASPIRIN
+    original_indication: pain / antipyretic
+    repurposed_disease_name: cardiovascular disease
+    repurposed_disease_efo: EFO_0000319
+    mechanism_targets: [PTGS1, PTGS2]
+    year_repurposed: 1988
+    notes: Low-dose antiplatelet for secondary CV prevention; ISIS-2 was the trial pivot.
+
+  - drug: EPLERENONE
+    original_indication: hypertension
+    repurposed_disease_name: heart failure
+    repurposed_disease_efo: EFO_0003144
+    mechanism_targets: [NR3C2]
+    year_repurposed: 2003
+    notes: Selective MR antagonist; EPHESUS established post-MI HF survival benefit.
+
+  - drug: EMPAGLIFLOZIN
+    original_indication: type 2 diabetes mellitus
+    repurposed_disease_name: heart failure
+    repurposed_disease_efo: EFO_0003144
+    mechanism_targets: [SLC5A2]
+    year_repurposed: 2021
+    notes: SGLT2 inhibitor; EMPEROR-Reduced / Preserved extended HF approval across LVEF.
+
+  - drug: LIRAGLUTIDE
+    original_indication: type 2 diabetes mellitus
+    repurposed_disease_name: obesity
+    repurposed_disease_efo: EFO_0001073
+    mechanism_targets: [GLP1R]
+    year_repurposed: 2014
+    notes: Saxenda -- first GLP-1 RA approved as a dedicated obesity therapy.
+
+  - drug: SEMAGLUTIDE
+    original_indication: type 2 diabetes mellitus
+    repurposed_disease_name: obesity
+    repurposed_disease_efo: EFO_0001073
+    mechanism_targets: [GLP1R]
+    year_repurposed: 2021
+    notes: Wegovy; STEP trials shifted obesity pharmacotherapy paradigm.
+
+  - drug: VERAPAMIL
+    original_indication: hypertension
+    repurposed_disease_name: migraine disorder
+    repurposed_disease_efo: MONDO_0005277
+    mechanism_targets: [CACNA1C, CACNA1D]
+    year_repurposed: 1985
+    notes: Calcium-channel blocker; first-line prophylaxis for cluster headache.
+
+  - drug: GABAPENTIN
+    original_indication: epilepsy
+    repurposed_disease_name: neuropathic pain
+    repurposed_disease_efo: EFO_0005762
+    mechanism_targets: [CACNA2D1, CACNA2D2]
+    year_repurposed: 2002
+    notes: alpha2-delta ligand; FDA postherpetic neuralgia.
+
+  - drug: PREGABALIN
+    original_indication: epilepsy
+    repurposed_disease_name: fibromyalgia
+    repurposed_disease_efo: EFO_0005687
+    mechanism_targets: [CACNA2D1, CACNA2D2]
+    year_repurposed: 2007
+    notes: alpha2-delta ligand; first agent specifically approved for fibromyalgia.
+
+  - drug: LAMOTRIGINE
+    original_indication: epilepsy
+    repurposed_disease_name: bipolar I disorder
+    repurposed_disease_efo: EFO_0009963
+    mechanism_targets: [SCN1A, SCN2A]
+    year_repurposed: 2003
+    notes: Sodium-channel modulator; FDA maintenance therapy for bipolar I.
+
+  - drug: QUETIAPINE
+    original_indication: schizophrenia
+    repurposed_disease_name: bipolar I disorder
+    repurposed_disease_efo: EFO_0009963
+    mechanism_targets: [DRD2, HTR2A, HTR1A]
+    year_repurposed: 2004
+    notes: Atypical antipsychotic; bipolar mania and depression indications.
+
+  - drug: RISPERIDONE
+    original_indication: schizophrenia
+    repurposed_disease_name: autism spectrum disorder
+    repurposed_disease_efo: EFO_0003756
+    mechanism_targets: [DRD2, HTR2A]
+    year_repurposed: 2006
+    notes: First FDA approval for autism-associated irritability.
+
+  - drug: ESKETAMINE
+    original_indication: anesthetic
+    repurposed_disease_name: major depressive disorder
+    repurposed_disease_efo: MONDO_0002009
+    mechanism_targets: [GRIN1, GRIN2A, GRIN2B]
+    year_repurposed: 2019
+    notes: NMDA antagonist; Spravato for treatment-resistant depression.
+
+  - drug: TADALAFIL
+    original_indication: erectile dysfunction
+    repurposed_disease_name: benign prostatic hyperplasia
+    repurposed_disease_efo: EFO_0000284
+    mechanism_targets: [PDE5A]
+    year_repurposed: 2011
+    notes: Cialis BPH indication; PDE5 inhibition relaxes prostatic smooth muscle.
+
+  - drug: HYDROXYUREA
+    original_indication: chronic myeloid leukemia
+    repurposed_disease_name: sickle cell anemia
+    repurposed_disease_efo: MONDO_0011382
+    mechanism_targets: [RRM1, RRM2]
+    year_repurposed: 1998
+    notes: Ribonucleotide reductase inhibition; induces fetal haemoglobin.
+
+  - drug: CYCLOSPORINE
+    original_indication: transplant rejection
+    repurposed_disease_name: atopic eczema
+    repurposed_disease_efo: EFO_0000274
+    mechanism_targets: [PPP3CA, PPP3CB, PPP3R1]
+    year_repurposed: 1997
+    notes: Calcineurin inhibition; systemic therapy for severe atopic dermatitis.
+
+  - drug: TOCILIZUMAB
+    original_indication: rheumatoid arthritis
+    repurposed_disease_name: temporal arteritis
+    repurposed_disease_efo: EFO_1001209
+    mechanism_targets: [IL6R]
+    year_repurposed: 2017
+    notes: IL-6R blockade; first non-steroid systemic therapy for giant cell arteritis.
+
+  - drug: ADALIMUMAB
+    original_indication: rheumatoid arthritis
+    repurposed_disease_name: hidradenitis suppurativa
+    repurposed_disease_efo: EFO_1000710
+    mechanism_targets: [TNF]
+    year_repurposed: 2015
+    notes: Anti-TNF; first systemic biologic approved for HS.
+
+  - drug: USTEKINUMAB
+    original_indication: plaque psoriasis
+    repurposed_disease_name: Crohn's disease
+    repurposed_disease_efo: EFO_0000384
+    mechanism_targets: [IL12B, IL23A]
+    year_repurposed: 2016
+    notes: p40 (IL-12 / IL-23) blockade; FDA Crohn's approval.
+
+  - drug: DUPILUMAB
+    original_indication: atopic dermatitis
+    repurposed_disease_name: eosinophilic esophagitis
+    repurposed_disease_efo: EFO_0004232
+    mechanism_targets: [IL4R]
+    year_repurposed: 2022
+    notes: IL-4Ralpha blockade; first FDA-approved biologic for EoE.
+
+  - drug: OMALIZUMAB
+    original_indication: allergic asthma
+    repurposed_disease_name: urticaria
+    repurposed_disease_efo: EFO_0005531
+    mechanism_targets: [FCER1A]
+    year_repurposed: 2014
+    notes: Anti-IgE; FDA chronic idiopathic urticaria approval (Xolair).
+
+  - drug: ONABOTULINUMTOXINA
+    original_indication: strabismus / blepharospasm
+    repurposed_disease_name: migraine disorder
+    repurposed_disease_efo: MONDO_0005277
+    mechanism_targets: [SNAP25]
+    year_repurposed: 2010
+    notes: SNARE cleavage; PREEMPT trials enabled chronic migraine indication.
+
+  - drug: BORTEZOMIB
+    original_indication: multiple myeloma
+    repurposed_disease_name: mantle cell lymphoma
+    repurposed_disease_efo: EFO_1001469
+    mechanism_targets: [PSMB1, PSMB5]
+    year_repurposed: 2006
+    notes: Proteasome inhibition; first MCL indication after MM.
+
+  - drug: ANAKINRA
+    original_indication: rheumatoid arthritis
+    repurposed_disease_name: cryopyrin-associated periodic syndrome
+    repurposed_disease_efo: MONDO_0016168
+    mechanism_targets: [IL1R1]
+    year_repurposed: 2012
+    notes: IL-1Ra; covers NLRP3-inflammasome autoinflammatory spectrum.
+
+  - drug: CARVEDILOL
+    original_indication: hypertension
+    repurposed_disease_name: heart failure
+    repurposed_disease_efo: EFO_0003144
+    mechanism_targets: [ADRB1, ADRB2, ADRA1A]
+    year_repurposed: 1997
+    notes: Beta + alpha-1 blockade; US Carvedilol HF Study.
+
+  - drug: MISOPROSTOL
+    original_indication: NSAID-induced gastric ulcer prophylaxis
+    repurposed_disease_name: postpartum hemorrhage
+    repurposed_disease_efo: EFO_0009579
+    mechanism_targets: [PTGER2, PTGER3, PTGER4]
+    year_repurposed: 2009
+    notes: PGE1 analogue; WHO-listed for PPH and labour induction.
+
+  - drug: ECULIZUMAB
+    original_indication: paroxysmal nocturnal hemoglobinuria
+    repurposed_disease_name: atypical hemolytic uremic syndrome with complement gene abnormality
+    repurposed_disease_efo: MONDO_0035290
+    mechanism_targets: [C5]
+    year_repurposed: 2011
+    notes: Anti-C5 mAb; FDA aHUS approval extended Soliris franchise.
+
+  - drug: PLERIXAFOR
+    original_indication: HIV entry inhibitor (development)
+    repurposed_disease_name: multiple myeloma
+    repurposed_disease_efo: EFO_0001378
+    mechanism_targets: [CXCR4]
+    year_repurposed: 2008
+    notes: CXCR4 antagonist; mobilises HSCs for autologous transplant.
+
+  - drug: ARSENIC TRIOXIDE
+    original_indication: traditional medicine
+    repurposed_disease_name: acute promyelocytic leukemia
+    repurposed_disease_efo: EFO_0000224
+    mechanism_targets: [PML, RARA]
+    year_repurposed: 2000
+    notes: PML degradation; modern arsenic + ATRA achieves >90% APL cure.
+
+  - drug: TRETINOIN
+    original_indication: acne / topical dermatology
+    repurposed_disease_name: acute promyelocytic leukemia
+    repurposed_disease_efo: EFO_0000224
+    mechanism_targets: [RARA]
+    year_repurposed: 1995
+    notes: All-trans retinoic acid; differentiation therapy for PML-RARA APL.
+
+  - drug: BROMOCRIPTINE
+    original_indication: hyperprolactinaemia / Parkinson disease
+    repurposed_disease_name: type 2 diabetes mellitus
+    repurposed_disease_efo: MONDO_0005148
+    mechanism_targets: [DRD2]
+    year_repurposed: 2009
+    notes: Cycloset; quick-release morning dosing modifies hypothalamic glucose set-point.
+
+  - drug: DONEPEZIL
+    original_indication: Alzheimer disease
+    repurposed_disease_name: vascular dementia
+    repurposed_disease_efo: EFO_0004718
+    mechanism_targets: [ACHE]
+    year_repurposed: 2003
+    notes: AChE inhibition; widely off-label in vascular and mixed dementia.
+
+  - drug: WARFARIN
+    original_indication: rodenticide / thrombosis prevention
+    repurposed_disease_name: venous thromboembolism
+    repurposed_disease_efo: EFO_0004286
+    mechanism_targets: [VKORC1, F2, F7, F9, F10]
+    year_repurposed: 1954
+    notes: Vitamin-K antagonist; canonical early anticoagulant repurposing.

@@ -170,7 +170,7 @@ def fig2_backtest():
     df = _run_validation()
     df["label"] = df["drug"].str.title() + r" $\to$ " + df["disease"].str.lower()
     df = df.sort_values("mech")
-    fig, ax = plt.subplots(figsize=(10, 7.5))
+    fig, ax = plt.subplots(figsize=(10, max(7.5, 0.22 * len(df) + 1.5)))
     colors = {"HIT": "#2C7A2E", "MISS": "#C03A2B", "DISEASE_NOT_IN_OT": "#888888",
               "DRUG_NOT_FOUND": "#888888"}
     bar_colors = [colors[s] for s in df["status"]]
