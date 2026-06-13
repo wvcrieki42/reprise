@@ -12,13 +12,57 @@ with the repo). To refresh, copy the latest output_full/...parquet over it.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 DATA = Path(__file__).parent / "data" / "repurposing_hypotheses.parquet"
+BRIEFS_DIR = Path(__file__).parent / "briefs"
 PAPER_URL = "https://github.ugent.be/wvcrieki/repurposed"
+
+
+def _safe_filename(s: str) -> str:
+    """Mirror scripts/build_deal_memos.py::_safe_filename so the lookup matches."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", s.strip())[:80] or "memo"
+
+
+def brief_path_for(substance: str, disease: str) -> Path | None:
+    """Return the path to a bundled brief PDF for this (substance, disease)
+    if one exists in dashboard/briefs/, else None."""
+    if not substance or not disease:
+        return None
+    p = BRIEFS_DIR / f"{_safe_filename(str(substance))}__{_safe_filename(str(disease))}__us.pdf"
+    return p if p.exists() else None
+
+
+CHEMBL_IMG_URL = "https://www.ebi.ac.uk/chembl/api/data/image/{chembl_id}.svg"
+
+
+@st.cache_data(show_spinner=False, ttl=24 * 3600)
+def fetch_chembl_structure(chembl_id: str) -> str | None:
+    """Fetch a 2D structure SVG from ChEMBL's public image endpoint.
+    Returns the raw SVG text on success, None for biologics / unknown IDs
+    (ChEMBL returns 400 for entries with no 2D structure)."""
+    if not chembl_id or not str(chembl_id).startswith("CHEMBL"):
+        return None
+    import urllib.request
+    import urllib.error
+    try:
+        req = urllib.request.Request(
+            CHEMBL_IMG_URL.format(chembl_id=chembl_id),
+            headers={"User-Agent": "REPRISE-dashboard/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            if resp.status != 200:
+                return None
+            ctype = resp.headers.get("Content-Type", "")
+            if "svg" not in ctype:
+                return None
+            return resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        return None
 
 st.set_page_config(
     page_title="REPRISE -- drug-repurposing screen",
@@ -37,6 +81,12 @@ def load_data() -> pd.DataFrame:
                 "investigation_prior", "pathway_score"):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    # Pre-compute whether a bundled brief PDF exists for this hypothesis.
+    name_col = "substance_name" if "substance_name" in df.columns else "drug_name"
+    df["has_brief"] = [
+        brief_path_for(s, d) is not None
+        for s, d in zip(df[name_col].fillna(""), df["disease_name"].fillna(""))
+    ]
     return df
 
 
@@ -148,6 +198,42 @@ with tab_browse:
         st.info("No hypotheses match these filters. Loosen them in the sidebar.")
         st.stop()
 
+    # ------------------------------------------------------------------
+    # Scatter -- opportunity vs mech, click any point to drill in
+    # ------------------------------------------------------------------
+    scatter_n = min(2000, len(view))
+    scatter_view = view.head(scatter_n).reset_index().rename(columns={"index": "_df_idx"})
+    fig = px.scatter(
+        scatter_view,
+        x="opportunity",
+        y="mechanistic_support",
+        color=scatter_view["is_orphan"].fillna(False).astype(bool).map(
+            {True: "orphan", False: "non-orphan"}),
+        color_discrete_map={"orphan": "#D55E00", "non-orphan": "#0072B2"},
+        hover_data={
+            "substance_name": True,
+            "disease_name": True,
+            "lead_target": True,
+            "rank": True,
+            "opportunity": ":.3f",
+            "mechanistic_support": ":.3f",
+            "_df_idx": False,
+        },
+        labels={"opportunity": "Opportunity (composite)",
+                "mechanistic_support": "Mechanism support (noisy-OR)",
+                "color": ""},
+        title=f"Opportunity vs mechanism support  (top {scatter_n} of "
+              f"{len(view):,} matches; click any point)",
+    )
+    fig.update_traces(marker=dict(size=7, opacity=0.75, line=dict(width=0)))
+    fig.update_layout(height=460, margin=dict(l=10, r=10, t=50, b=10),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                  xanchor="right", x=1))
+    scatter_event = st.plotly_chart(
+        fig, use_container_width=True, key="scatter",
+        on_select="rerun", selection_mode="points",
+    )
+
     display_cols = [
         c for c in [
             "rank", "substance_name", "disease_name", "lead_target",
@@ -156,6 +242,7 @@ with tab_browse:
             "latest_patent_year", "has_generic",
             "pubmed_count", "trial_count", "patent_count", "investigation_prior",
             "combo_partner_1_name", "combo_partner_1_synergy",
+            "has_brief",
         ] if c in view.columns
     ]
 
@@ -207,6 +294,9 @@ with tab_browse:
                      "primary substance misses."),
             "combo_partner_1_synergy": st.column_config.NumberColumn("Synergy", format="%.3f",
                 help="combo_mech_support - primary_mech_support under the noisy-OR."),
+            "has_brief": st.column_config.CheckboxColumn("Brief",
+                help="A bundled one-page PDF brief is available for this hypothesis. "
+                     "Click the row to download it from the detail panel below."),
         },
         on_select="rerun",
         selection_mode="single-row",
@@ -215,7 +305,7 @@ with tab_browse:
 
     st.caption("Showing the top 2,000 rows after filtering. Refine in the sidebar to "
                "drill in. Hover any column header for its definition. Click any row "
-               "for the full per-hypothesis brief.")
+               "(or any scatter point above) for the full per-hypothesis brief.")
 
     # ------------------------------------------------------------------
     # Per-hit detail panel
@@ -229,7 +319,28 @@ with tab_browse:
     def render_brief(row: pd.Series) -> None:
         substance = str(row.get("substance_name") or row.get("drug_name") or "?")
         disease = str(row.get("disease_name") or "?")
-        st.subheader(f"{substance} -> {disease}")
+        chembl_id = str(row.get("substance_chembl_id") or row.get("drug_id") or "")
+
+        header_col, struct_col = st.columns([3, 2])
+        with header_col:
+            st.subheader(f"{substance} -> {disease}")
+            if chembl_id.startswith("CHEMBL"):
+                st.caption(f"ChEMBL ID: [{chembl_id}](https://www.ebi.ac.uk/chembl/"
+                           f"explore/compound/{chembl_id})")
+        with struct_col:
+            if chembl_id.startswith("CHEMBL"):
+                svg = fetch_chembl_structure(chembl_id)
+                if svg:
+                    st.markdown("**Chemical structure**")
+                    st.markdown(
+                        f"<div style='max-width:340px; background:white; padding:6px; "
+                        f"border:1px solid #e0e0e0; border-radius:6px'>{svg}</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown("**Chemical structure**")
+                    st.caption("_Not available -- biologic or other non-small-molecule "
+                               "substance (ChEMBL has no 2D structure for this entry)._")
 
         st.markdown("**Why this hypothesis is real**")
         bits = []
@@ -309,16 +420,49 @@ with tab_browse:
                     f"synergy {float(row['combo_partner_2_synergy']):.2f})."
                 )
 
+        # Download button for the bundled PDF brief, if one exists
+        substance_name = row.get("substance_name") or row.get("drug_name") or ""
+        disease_name = row.get("disease_name") or ""
+        brief_p = brief_path_for(substance_name, disease_name)
+        if brief_p is not None:
+            st.markdown("**One-page PDF brief**")
+            st.download_button(
+                label=f":page_facing_up: Download brief ({substance_name} -> {disease_name})",
+                data=brief_p.read_bytes(),
+                file_name=brief_p.name,
+                mime="application/pdf",
+                key=f"dl_{brief_p.name}",
+            )
+        else:
+            st.caption("_No bundled PDF brief for this hypothesis -- regenerate via "
+                       "`scripts/build_deal_memos.py --no-kol` to add one._")
+
         with st.expander("Raw row (all 36 columns)"):
             st.dataframe(row.to_frame().T, use_container_width=True, hide_index=True)
 
-    sel = (event.selection or {}).get("rows") if hasattr(event, "selection") else []
-    if sel:
+    # ------------------------------------------------------------------
+    # Resolve the selected row from either the scatter OR the table.
+    # Both widgets share the same head(2000) view. customdata in plotly
+    # carries the dataframe index so we can resolve it directly.
+    # ------------------------------------------------------------------
+    selected_index = None
+    sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
+    if sc_pts:
+        p = sc_pts[0]
+        pos = p.get("point_index") if "point_index" in p else p.get("pointIndex")
+        if pos is not None and pos < len(scatter_view):
+            selected_index = int(scatter_view.iloc[pos]["_df_idx"])
+    if selected_index is None:
+        sel = (event.selection or {}).get("rows") if hasattr(event, "selection") else []
+        if sel:
+            selected_index = view.head(2000).iloc[sel[0]].name
+
+    if selected_index is not None:
         st.divider()
-        selected_index = view.head(2000).iloc[sel[0]].name
         render_brief(df.loc[selected_index])
     else:
-        st.info("Click any row above to see the full mechanism / IP / market brief.")
+        st.info("Click any scatter point or table row above to see the full "
+                "mechanism / IP / market brief and download its PDF.")
 
 
 # ======================================================================
