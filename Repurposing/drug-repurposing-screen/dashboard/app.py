@@ -12,6 +12,7 @@ with the repo). To refresh, copy the latest output_full/...parquet over it.
 """
 from __future__ import annotations
 
+import base64
 import re
 from pathlib import Path
 
@@ -43,6 +44,17 @@ def brief_path_for(substance: str, disease: str) -> Path | None:
         return None
     p = BRIEFS_DIR / f"{_safe_filename(str(substance))}__{_safe_filename(str(disease))}__us.pdf"
     return p if p.exists() else None
+
+
+@st.cache_data(show_spinner=False)
+def brief_data_uri(brief_path_str: str) -> str:
+    """Encode a brief PDF as a data: URI so LinkColumn opens it without
+    depending on Streamlit's static-file serving."""
+    p = Path(brief_path_str)
+    if not p.exists():
+        return ""
+    b64 = base64.b64encode(p.read_bytes()).decode("ascii")
+    return f"data:application/pdf;base64,{b64}"
 
 
 CHEMBL_IMG_URL = "https://www.ebi.ac.uk/chembl/api/data/image/{chembl_id}.svg"
@@ -125,13 +137,14 @@ def load_data() -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     # Pre-compute a row-level link to the bundled PDF brief when one exists.
-    # The URL is relative to the Streamlit app root and uses the static-serving
-    # convention (config in .streamlit/config.toml). Empty string when missing.
+    # Embed as a base64 data: URI -- the browser opens it directly, no
+    # dependency on Streamlit's static-file serving (which is finicky to
+    # configure across local + Cloud + reverse-proxy deploys).
     name_col = "substance_name" if "substance_name" in df.columns else "drug_name"
     brief_urls = []
     for s, d in zip(df[name_col].fillna(""), df["disease_name"].fillna("")):
         p = brief_path_for(s, d)
-        brief_urls.append(BRIEFS_URL_PREFIX + p.name if p is not None else "")
+        brief_urls.append(brief_data_uri(str(p)) if p is not None else "")
     df["brief_url"] = brief_urls
     # PubMed search URL per row -- non-empty only when count > 0 so the
     # LinkColumn renders blank for 0/NA rows and a clickable count for hits.
@@ -400,29 +413,36 @@ with tab_browse:
         disease = str(row.get("disease_name") or "?")
         chembl_id = str(row.get("substance_chembl_id") or row.get("drug_id") or "")
 
-        header_col, struct_col = st.columns([3, 2])
-        with header_col:
-            st.subheader(f"{substance} -> {disease}")
-            if chembl_id.startswith("CHEMBL"):
-                st.caption(f"ChEMBL ID: [{chembl_id}](https://www.ebi.ac.uk/chembl/"
-                           f"explore/compound/{chembl_id})")
-        with struct_col:
-            if chembl_id.startswith("CHEMBL"):
-                st.markdown("**Chemical structure**")
-                svg = fetch_chembl_structure(chembl_id)
-                if svg:
-                    # Strip the SVG's fixed pixel dimensions so the browser
-                    # scales it to whatever Streamlit's image renderer gives
-                    # us (st.image's width arg below). The viewBox stays
-                    # intact, so the geometry is preserved.
-                    svg_scaled = re.sub(r"\swidth='[^']*'", "", svg, count=1)
-                    svg_scaled = re.sub(r"\sheight='[^']*'", "", svg_scaled, count=1)
-                    # st.image accepts an SVG XML string directly (Streamlit
-                    # >= 1.30) and renders it inline -- no iframe needed.
-                    st.image(svg_scaled, width=320)
-                else:
-                    st.caption("_Not available -- biologic or other non-small-molecule "
-                               "substance (ChEMBL has no 2D structure for this entry)._")
+        st.subheader(f"{substance}  ->  {disease}")
+        if chembl_id.startswith("CHEMBL"):
+            st.caption(
+                f"ChEMBL ID: [{chembl_id}](https://www.ebi.ac.uk/chembl/"
+                f"explore/compound/{chembl_id})"
+            )
+
+        # ----- Chemical structure (rendered first, full width, no scrolling) ----
+        if chembl_id.startswith("CHEMBL"):
+            svg = fetch_chembl_structure(chembl_id)
+            if svg:
+                svg_b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+                # Markdown <img> with data: URI -- guaranteed to render in any
+                # Streamlit version / deploy mode.
+                st.markdown(
+                    f"<div style='background:white;display:inline-block;padding:8px;"
+                    f"border:1px solid #e0e0e0;border-radius:8px;margin-bottom:10px'>"
+                    f"<img src='data:image/svg+xml;base64,{svg_b64}' "
+                    f"style='width:320px;height:auto;display:block' "
+                    f"alt='Structure of {substance}'/>"
+                    f"<div style='text-align:center;font-size:11px;color:#555;"
+                    f"margin-top:4px'>2D structure (ChEMBL)</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption(
+                    ":dna: _2D structure not available -- biologic or other "
+                    "non-small-molecule substance (mAb, peptide, gene therapy)._"
+                )
 
         st.markdown("**Why this hypothesis is real**")
         bits = []
