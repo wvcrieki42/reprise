@@ -197,12 +197,18 @@ class LiteraturePriorClient:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def score_pairs(self, pairs: pd.DataFrame) -> pd.DataFrame:
+    def score_pairs(self, pairs: pd.DataFrame,
+                    only_sources: set[str] | None = None) -> pd.DataFrame:
         """Input columns: target_symbol, efo_id, disease_name.
         Optional: target_synonyms, disease_synonyms (each a semicolon-separated
         string; OR'd into the search query alongside the primary term).
         Output: same keys + pubmed_count, europepmc_count, trial_count,
         patent_count, investigation_prior.
+
+        only_sources: when set (e.g. {"lens"}), restricts this call to those
+        sources only, regardless of the client's enable_* flags. Used by the
+        Lens-extended coverage pass that queries patents past the top-N cap
+        on PubMed / Europe PMC / NCT.
         """
         required = {"target_symbol", "efo_id", "disease_name"}
         missing = required - set(pairs.columns)
@@ -227,6 +233,8 @@ class LiteraturePriorClient:
                                       ("clinicaltrials", self.enable_clinicaltrials),
                                       ("lens", self.enable_lens and bool(self.lens_api_token)))
                       if on]
+        if only_sources is not None:
+            sources_on = [s for s in sources_on if s in only_sources]
         counts = {s: [None] * len(work) for s in sources_on}
         tasks = []
         for s in sources_on:

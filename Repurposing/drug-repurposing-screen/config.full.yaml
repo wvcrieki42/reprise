@@ -170,7 +170,11 @@ literature:
   # investigation_prior in [0, 1]. To actually re-rank by it, set
   # scoring.w_investigation > 0 above.
   enabled: true
-  top_n: 5000                # only enrich the top 5k -- keeps API budget sane
+  top_n: 5000                # full 4-source pass on the top-N hypotheses
+  lens_top_n: 5000           # Lens-only extended pass past top_n (set higher than top_n
+                             # to extend patent coverage without burning PubMed/NCT
+                             # quota; dedup on (target, disease) keeps issued query
+                             # count bounded by unique pairs)
   cache_dir: .cache/literature
   enable_pubmed: true
   enable_europepmc: true

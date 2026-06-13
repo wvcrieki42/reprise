@@ -454,6 +454,7 @@ def add_literature_pass(ranked: pd.DataFrame, lit_client, cfg: Config) -> pd.Dat
     original opportunity but get NaN literature columns.
     """
     top_n = int(cfg.get("literature", "top_n", default=5000))
+    lens_top_n = int(cfg.get("literature", "lens_top_n", default=top_n))
     w_inv = float(cfg.get("scoring", "w_investigation", default=0.5))
     count_cols = ["pubmed_count", "europepmc_count", "trial_count", "patent_count"]
     out = ranked.copy()
@@ -463,22 +464,52 @@ def add_literature_pass(ranked: pd.DataFrame, lit_client, cfg: Config) -> pd.Dat
         out["investigation_prior"] = float("nan")
         return out
 
-    head = out.head(top_n)
     uniq_cols = ["lead_target", "efo_id", "disease_name"]
     for c in ("target_synonyms", "disease_synonyms"):
-        if c in head.columns:
+        if c in out.columns:
             uniq_cols.append(c)
-    uniq = (head[uniq_cols]
-            .rename(columns={"lead_target": "target_symbol"})
-            .dropna(subset=["target_symbol", "disease_name"])
-            .drop_duplicates(subset=["target_symbol", "efo_id", "disease_name"]))
+
+    def _uniq_slice(df: pd.DataFrame) -> pd.DataFrame:
+        return (df[uniq_cols]
+                .rename(columns={"lead_target": "target_symbol"})
+                .dropna(subset=["target_symbol", "disease_name"])
+                .drop_duplicates(subset=["target_symbol", "efo_id", "disease_name"]))
+
+    head = out.head(top_n)
+    uniq = _uniq_slice(head)
     prior = lit_client.score_pairs(uniq).rename(columns={"target_symbol": "lead_target"})
-    # Drop the synonym helper columns from the merge result -- they were query
-    # aids; the only thing we keep is the count columns + investigation_prior.
     drop_helpers = [c for c in ("target_synonyms", "disease_synonyms") if c in prior.columns]
     if drop_helpers:
         prior = prior.drop(columns=drop_helpers)
     out = out.merge(prior, on=["lead_target", "efo_id", "disease_name"], how="left")
+
+    # Optional Lens-only extended coverage: query patents past the top-N cap.
+    # Cheap sources stay capped at top_n -- only Lens runs over the extended
+    # rank window, deduped on (target, disease) so the issued query count is
+    # bounded by unique pairs, not by row count. investigation_prior on these
+    # rows is computed from the Lens count alone (score_pairs aggregates only
+    # over only_sources), so the downstream damping math is unchanged.
+    if lens_top_n > top_n:
+        ext = out.iloc[top_n:lens_top_n]
+        ext_uniq = _uniq_slice(ext)
+        if not ext_uniq.empty:
+            lens_only = (lit_client.score_pairs(ext_uniq, only_sources={"lens"})
+                         .rename(columns={"target_symbol": "lead_target",
+                                          "patent_count": "_lens_patent",
+                                          "investigation_prior": "_lens_prior"}))
+            keep = ["lead_target", "efo_id", "disease_name",
+                    "_lens_patent", "_lens_prior"]
+            lens_only = lens_only[[c for c in keep if c in lens_only.columns]]
+            ext_idx = out.index[top_n:lens_top_n]
+            patched = (out.loc[ext_idx, ["lead_target", "efo_id", "disease_name"]]
+                       .merge(lens_only,
+                              on=["lead_target", "efo_id", "disease_name"], how="left"))
+            patched.index = ext_idx
+            out.loc[ext_idx, "patent_count"] = patched["_lens_patent"]
+            looked_up = patched["_lens_prior"].notna()
+            out.loc[ext_idx[looked_up], "investigation_prior"] = (
+                patched.loc[ext_idx[looked_up], "_lens_prior"].values
+            )
     if w_inv > 0:
         damp = (1.0 - w_inv * out["investigation_prior"].fillna(0.0).clip(0, 1)).clip(0, 1)
         # Only damp rows that actually received a literature lookup -- a missing
