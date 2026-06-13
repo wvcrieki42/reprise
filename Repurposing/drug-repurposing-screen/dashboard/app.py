@@ -74,6 +74,20 @@ st.set_page_config(
 # ----------------------------------------------------------------------
 # Data
 # ----------------------------------------------------------------------
+PUBMED_SEARCH_URL = "https://pubmed.ncbi.nlm.nih.gov/?term="
+
+
+def _pubmed_query_url(target: str, disease: str, count: int) -> str:
+    """Build a PubMed search URL for this (target, disease) pair. The count is
+    embedded as a fragment so the LinkColumn display_text regex can render it
+    as the clickable label without changing the URL semantics."""
+    import urllib.parse
+    if not target or not disease or not count:
+        return ""
+    term = f'"{target}"[tiab] AND "{disease}"[tiab]'
+    return f"{PUBMED_SEARCH_URL}{urllib.parse.quote_plus(term)}#n={int(count)}"
+
+
 @st.cache_data(show_spinner=False)
 def load_data() -> pd.DataFrame:
     df = pd.read_parquet(DATA)
@@ -87,6 +101,15 @@ def load_data() -> pd.DataFrame:
         brief_path_for(s, d) is not None
         for s, d in zip(df[name_col].fillna(""), df["disease_name"].fillna(""))
     ]
+    # PubMed search URL per row -- non-empty only when count > 0 so the
+    # LinkColumn renders blank for 0/NA rows and a clickable count for hits.
+    if {"pubmed_count", "lead_target", "disease_name"} <= set(df.columns):
+        df["pubmed_link"] = [
+            _pubmed_query_url(t, d, c) if pd.notna(c) and int(c) > 0 else ""
+            for t, d, c in zip(df["lead_target"].fillna(""),
+                               df["disease_name"].fillna(""),
+                               df["pubmed_count"].fillna(0))
+        ]
     return df
 
 
@@ -240,7 +263,7 @@ with tab_browse:
             "opportunity", "mechanistic_support", "novelty", "direction_status",
             "tissue_status", "is_orphan", "us_patients",
             "latest_patent_year", "has_generic",
-            "pubmed_count", "trial_count", "patent_count", "investigation_prior",
+            "pubmed_link", "trial_count", "patent_count", "investigation_prior",
             "combo_partner_1_name", "combo_partner_1_synergy",
             "has_brief",
         ] if c in view.columns
@@ -282,7 +305,13 @@ with tab_browse:
                 help="Latest FDA Orange Book patent expiry year for the active ingredient."),
             "has_generic": st.column_config.CheckboxColumn("Generic",
                 help="True if any ANDA generic has been filed for this active ingredient."),
-            "pubmed_count": st.column_config.NumberColumn("PubMed", format="%d"),
+            "pubmed_link": st.column_config.LinkColumn(
+                "PubMed",
+                help="Number of PubMed papers co-mentioning the lead target and "
+                     "the disease in title/abstract. Click to open the search "
+                     "in a new tab.",
+                display_text=r"#n=(\d+)$",
+            ),
             "trial_count": st.column_config.NumberColumn("Trials", format="%d"),
             "patent_count": st.column_config.NumberColumn("Patents", format="%d",
                 help="Lens.org patent filings matching the target + disease search."),
