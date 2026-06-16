@@ -252,9 +252,7 @@ with tab_browse:
                         type="primary",
                     )
                     st.caption(
-                        "The same row also appears at the top of the **Top-5 "
-                        "always-shown** mini-table below and in the main "
-                        "ranked table beneath that."
+                        "The same row appears at the top of the ranked table below."
                     )
 
     # ------------------------------------------------------------------
@@ -414,27 +412,6 @@ with tab_browse:
     else:
         st.session_state["picker_index"] = None
 
-    # ------------------------------------------------------------------
-    # Always-shown top-5 mini-table -- guarantees the top-ranked hypotheses
-    # are visible in the table even when the sidebar filters would exclude
-    # them. Reuses the same column config as the main table below.
-    # ------------------------------------------------------------------
-    top5 = df.head(5)
-    available_top5_cols = [c for c in display_cols if c in top5.columns]
-    st.markdown("### :trophy: Top 5 ranked hypotheses (always shown)")
-    st.caption(
-        "These 5 leaders are pinned regardless of any sidebar filter, "
-        "so the top of the global ranking is never out of view. The full "
-        "filtered table is just below."
-    )
-    st.dataframe(
-        top5[available_top5_cols],
-        use_container_width=True,
-        hide_index=True,
-        key="top5_table",
-    )
-
-    st.markdown("### :mag: Filtered ranked table")
     event = st.dataframe(
         view[display_cols].head(2000),
         use_container_width=True,
@@ -1104,7 +1081,7 @@ with tab_faq:
     st.divider()
     st.markdown("### A few honest caveats")
     st.markdown(
-        "- The screen is a **research artefact**. Scores are computational "
+        "- The screen is a **research project**. Scores are computational "
         "priors, not clinical recommendations.\n"
         "- **Open Targets coverage is the precision ceiling.** The six backtest "
         "misses (minoxidil/alopecia, propranolol/hemangioma, acetazolamide/IIH, "
@@ -1127,7 +1104,7 @@ with tab_faq:
 
 st.divider()
 st.caption(
-    "REPRISE is a research artefact, not a clinical recommendation. "
+    "REPRISE is a research project, not a clinical recommendation. "
     "All scores are computational priors. "
     f"[Source]({PAPER_URL})  |  manuscript: `manuscript/repurposing_screen_manuscript.pdf`"
 )
