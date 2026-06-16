@@ -269,11 +269,17 @@ with tab_browse:
     disease_q = st.sidebar.text_input("Disease name contains").strip().lower()
     target_q = st.sidebar.text_input("Lead target contains").strip().upper()
 
+    # Round the slider bounds outwards so the default range covers every
+    # actual data point -- otherwise round(1.25366, 2) = 1.25 silently
+    # excludes the top-ranked hypothesis when between() is applied below.
+    import math as _math
     opp_min, opp_max = float(df["opportunity"].min()), float(df["opportunity"].max())
+    opp_lo_default = _math.floor(opp_min * 100) / 100
+    opp_hi_default = _math.ceil(opp_max * 100) / 100
     opp_lo, opp_hi = st.sidebar.slider(
         "Opportunity score",
-        min_value=round(opp_min, 2), max_value=round(opp_max, 2),
-        value=(round(opp_min, 2), round(opp_max, 2)), step=0.05,
+        min_value=opp_lo_default, max_value=opp_hi_default,
+        value=(opp_lo_default, opp_hi_default), step=0.05,
     )
 
     if "mechanistic_support" in df.columns:
