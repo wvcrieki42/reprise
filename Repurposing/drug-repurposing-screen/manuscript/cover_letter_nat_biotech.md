@@ -23,7 +23,7 @@ I would like to submit the enclosed Article, **"REPRISE: integrated mechanism, r
 
 The contribution we believe is novel and well-suited to your readership:
 
-- **Integrated screening at scale.** REPRISE evaluates **176,272 drug–disease hypotheses** (3,996 approved drugs × 28,198 ontology diseases) in approximately **12 minutes on a laptop**, layering noisy-OR mechanism scoring with directionality from genetic evidence, tissue expression, Reactome pathway co-membership, FDA Orange Book IP runway, Orphanet rare-disease prevalence, and a four-source literature-and-patent prior (PubMed, Europe PMC, ClinicalTrials.gov, Lens.org).
+- **Integrated screening at scale.** REPRISE evaluates **176,272 drug–disease hypotheses** (3,996 approved drugs × 28,198 ontology diseases) in approximately **12 minutes on a laptop**, layering noisy-OR mechanism scoring with directionality from genetic evidence, tissue expression, Reactome pathway co-membership, FDA Orange Book IP runway, Orphanet rare-disease prevalence, and a four-source literature-and-patent prior (PubMed, Europe PMC, ClinicalTrials.gov, Lens.org) computed across **every ranked hypothesis** — not just the top *N*. Of the 176,272 hypotheses, 83,042 carry PubMed evidence, 90,123 Europe PMC evidence, 61,721 a registered clinical trial, and 3,008 a Lens patent filing.
 
 - **Measured precision, not anecdote.** Against a curated set of **54 historic FDA / EMA repurposing successes**, REPRISE recovers **48 (89 %, 95 % Clopper–Pearson CI 77–96 %)** at a mechanism-support threshold of 0.30. Every one of the six misses traces to a specific Open Targets coverage gap, not a pipeline-logic error — a transparent, reproducible failure analysis that we believe sets a new bar for repurposing-screen validation.
 
