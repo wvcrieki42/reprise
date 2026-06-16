@@ -348,6 +348,11 @@ with tab_browse:
         color=scatter_view["is_orphan"].fillna(False).astype(bool).map(
             {True: "orphan", False: "non-orphan"}),
         color_discrete_map={"orphan": "#D55E00", "non-orphan": "#0072B2"},
+        # Carry the original df index on every point so the click event
+        # returns it directly via customdata. Using point_index alone is
+        # broken when plotly splits the data into per-colour traces --
+        # the index is then position-within-trace, not within scatter_view.
+        custom_data=["_df_idx"],
         hover_data={
             "substance_name": True,
             "disease_name": True,
@@ -374,14 +379,16 @@ with tab_browse:
 
     # Resolve the scatter selection eagerly so we can pin the clicked row
     # to the top of the ranked table below (Streamlit has no scroll-to-row
-    # API). The same index also drives the detail panel further down.
+    # API). customdata = [_df_idx] is set on every point in the px.scatter
+    # call above, so it round-trips through the click event regardless of
+    # which colour trace plotly put the point on.
     scatter_idx = None
     sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
     if sc_pts:
         p0 = sc_pts[0]
-        pos = p0.get("point_index") if "point_index" in p0 else p0.get("pointIndex")
-        if pos is not None and pos < len(scatter_view):
-            scatter_idx = int(scatter_view.iloc[pos]["_df_idx"])
+        cd = p0.get("customdata") or p0.get("custom_data")
+        if cd:
+            scatter_idx = int(cd[0])
 
     display_cols = [
         c for c in [
