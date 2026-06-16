@@ -206,58 +206,56 @@ tab_browse, tab_history, tab_faq = st.tabs([
 # ======================================================================
 with tab_browse:
     # ------------------------------------------------------------------
-    # Quick preview -- always-visible top-5 cards so the user lands on the
-    # ranking immediately, before any filters are touched. Each card shows
-    # structure, key scores, and a one-click brief download.
+    # Quick preview -- always-visible top-ranked hypothesis so the user
+    # lands on the leader immediately, before any filters are touched.
     # ------------------------------------------------------------------
-    top_n_preview = 5
-    if len(df) >= 1:
+    top_row = df.iloc[0] if len(df) else None
+    if top_row is not None:
         with st.expander(
-            f":eyes: Quick preview of the top {top_n_preview} ranked hypotheses",
+            f":eyes: Quick preview of the #1 ranked hypothesis "
+            f"({top_row['substance_name']} -> {top_row['disease_name']})",
             expanded=True,
         ):
-            preview_rows = df.head(top_n_preview)
-            cols = st.columns(top_n_preview)
-            for col, (_, row) in zip(cols, preview_rows.iterrows()):
-                with col:
-                    cid = str(row.get("substance_chembl_id") or "")
-                    st.markdown(
-                        f"**#{int(row['rank'])} {row['substance_name']}**  \n"
-                        f"_-> {row['disease_name']}_"
-                    )
-                    if cid.startswith("CHEMBL"):
-                        svg = fetch_chembl_structure(cid)
-                        if svg:
-                            svg_fit = re.sub(r"\swidth='[^']*'", " width='200'", svg, count=1)
-                            svg_fit = re.sub(r"\sheight='[^']*'", " height='200'", svg_fit, count=1)
-                            st.html(
-                                "<div style='border:1px solid #e0e0e0;border-radius:8px;"
-                                "padding:6px;background:#fff;text-align:center'>"
-                                f"{svg_fit}</div>"
-                            )
-                        else:
-                            st.caption(":dna: _biologic -- no 2D structure_")
-                    st.caption(
-                        f"opp **{row['opportunity']:.3f}** | "
-                        f"mech **{row['mechanistic_support']:.3f}** | "
-                        f"target **{row['lead_target']}**"
-                    )
-                    brief_p = brief_path_for(row["substance_name"], row["disease_name"])
-                    if brief_p is not None:
-                        st.download_button(
-                            label=":page_facing_up: brief",
-                            data=brief_p.read_bytes(),
-                            file_name=brief_p.name,
-                            mime="application/pdf",
-                            key=f"dl_preview_{int(row['rank'])}",
-                            use_container_width=True,
+            pc1, pc2 = st.columns([2, 3])
+            cid = str(top_row.get("substance_chembl_id") or "")
+            with pc1:
+                if cid.startswith("CHEMBL"):
+                    svg = fetch_chembl_structure(cid)
+                    if svg:
+                        svg_fit = re.sub(r"\swidth='[^']*'", " width='300'", svg, count=1)
+                        svg_fit = re.sub(r"\sheight='[^']*'", " height='300'", svg_fit, count=1)
+                        st.html(
+                            "<div style='border:1px solid #e0e0e0;border-radius:8px;"
+                            "padding:8px;background:#fff;display:inline-block;"
+                            f"text-align:center'>{svg_fit}"
+                            "<div style='font-size:11px;color:#666;margin-top:4px'>"
+                            f"2D structure of {top_row['substance_name']} (ChEMBL)"
+                            "</div></div>"
                         )
-            st.caption(
-                "Each card mirrors a row in the table below. The full per-hit "
-                "detail panel (with mechanism / IP / market narrative) is "
-                "reachable by picking from the dropdown below or clicking the "
-                "corresponding table row / scatter point."
-            )
+                    else:
+                        st.caption("Structure not available (biologic).")
+            with pc2:
+                st.markdown(
+                    f"**Rank #{int(top_row['rank'])}** -- "
+                    f"opportunity **{top_row['opportunity']:.3f}**, "
+                    f"mech support **{top_row['mechanistic_support']:.3f}**, "
+                    f"lead target **{top_row['lead_target']}**."
+                )
+                brief_p = brief_path_for(top_row["substance_name"], top_row["disease_name"])
+                if brief_p is not None:
+                    st.download_button(
+                        label=":page_facing_up: Download the one-page PDF brief",
+                        data=brief_p.read_bytes(),
+                        file_name=brief_p.name,
+                        mime="application/pdf",
+                        key="dl_preview",
+                        type="primary",
+                    )
+                    st.caption(
+                        "The same row also appears at the top of the **Top-5 "
+                        "always-shown** mini-table below and in the main "
+                        "ranked table beneath that."
+                    )
 
     # ------------------------------------------------------------------
     # Sidebar filters (shared, but only meaningful while Browse is active)
@@ -410,6 +408,27 @@ with tab_browse:
     else:
         st.session_state["picker_index"] = None
 
+    # ------------------------------------------------------------------
+    # Always-shown top-5 mini-table -- guarantees the top-ranked hypotheses
+    # are visible in the table even when the sidebar filters would exclude
+    # them. Reuses the same column config as the main table below.
+    # ------------------------------------------------------------------
+    top5 = df.head(5)
+    available_top5_cols = [c for c in display_cols if c in top5.columns]
+    st.markdown("### :trophy: Top 5 ranked hypotheses (always shown)")
+    st.caption(
+        "These 5 leaders are pinned regardless of any sidebar filter, "
+        "so the top of the global ranking is never out of view. The full "
+        "filtered table is just below."
+    )
+    st.dataframe(
+        top5[available_top5_cols],
+        use_container_width=True,
+        hide_index=True,
+        key="top5_table",
+    )
+
+    st.markdown("### :mag: Filtered ranked table")
     event = st.dataframe(
         view[display_cols].head(2000),
         use_container_width=True,
