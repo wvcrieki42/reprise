@@ -1,6 +1,8 @@
 # Drug Repurposing Screen
 Mechanism-driven screen to rank potential novel drug–disease pairs from known drug targets, target–disease evidence, novelty filtering, and configurable scoring.
 
+**Public dashboard: https://reprise.streamlit.app** — browse the 176,272-row ranked output interactively, no install required.
+
 ## Project structure
 ```text
 drug-repurposing-screen/
