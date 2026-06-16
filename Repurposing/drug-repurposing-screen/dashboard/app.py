@@ -146,6 +146,16 @@ def load_data() -> pd.DataFrame:
         p = brief_path_for(s, d)
         brief_urls.append(brief_data_uri(str(p)) if p is not None else "")
     df["brief_url"] = brief_urls
+    # Per-row 2D structure URL pointing at ChEMBL's public image endpoint.
+    # Streamlit's ImageColumn renders SVG directly from cross-origin URLs;
+    # biologic / non-small-molecule entries (mAbs, peptides, gene therapies)
+    # return 404 from ChEMBL and the cell stays empty.
+    if "substance_chembl_id" in df.columns:
+        df["structure_url"] = [
+            f"https://www.ebi.ac.uk/chembl/api/data/image/{cid}.svg"
+            if str(cid).startswith("CHEMBL") else ""
+            for cid in df["substance_chembl_id"].fillna("")
+        ]
     # PubMed search URL per row -- non-empty only when count > 0 so the
     # LinkColumn renders blank for 0/NA rows and a clickable count for hits.
     if {"pubmed_count", "lead_target", "disease_name"} <= set(df.columns):
@@ -196,15 +206,16 @@ tab_browse, tab_history, tab_faq = st.tabs([
 # ======================================================================
 with tab_browse:
     # ------------------------------------------------------------------
-    # Quick preview -- always-visible top hit so the user immediately sees
-    # whether structure rendering and brief downloads work in their env,
-    # without any selection / click required.
+    # Quick preview -- always-visible top-ranked hypothesis so the user
+    # lands on the leader immediately, before any filters are touched.
     # ------------------------------------------------------------------
     top_row = df.iloc[0] if len(df) else None
     if top_row is not None:
-        with st.expander(":eyes: Quick preview of the top-ranked hypothesis "
-                          f"({top_row['substance_name']} -> {top_row['disease_name']})",
-                          expanded=True):
+        with st.expander(
+            f":eyes: Quick preview of the #1 ranked hypothesis "
+            f"({top_row['substance_name']} -> {top_row['disease_name']})",
+            expanded=True,
+        ):
             pc1, pc2 = st.columns([2, 3])
             cid = str(top_row.get("substance_chembl_id") or "")
             with pc1:
@@ -224,10 +235,12 @@ with tab_browse:
                     else:
                         st.caption("Structure not available (biologic).")
             with pc2:
-                st.markdown(f"**Rank #{int(top_row['rank'])}** -- "
-                            f"opportunity **{top_row['opportunity']:.3f}**, "
-                            f"mech support **{top_row['mechanistic_support']:.3f}**, "
-                            f"lead target **{top_row['lead_target']}**.")
+                st.markdown(
+                    f"**Rank #{int(top_row['rank'])}** -- "
+                    f"opportunity **{top_row['opportunity']:.3f}**, "
+                    f"mech support **{top_row['mechanistic_support']:.3f}**, "
+                    f"lead target **{top_row['lead_target']}**."
+                )
                 brief_p = brief_path_for(top_row["substance_name"], top_row["disease_name"])
                 if brief_p is not None:
                     st.download_button(
@@ -239,9 +252,7 @@ with tab_browse:
                         type="primary",
                     )
                     st.caption(
-                        "The same PDF is also available via the **Inspect a top "
-                        "hypothesis** picker below, or by clicking any of the top-30 "
-                        "ranked rows in the table."
+                        "The same row appears at the top of the ranked table below."
                     )
 
     # ------------------------------------------------------------------
@@ -256,11 +267,17 @@ with tab_browse:
     disease_q = st.sidebar.text_input("Disease name contains").strip().lower()
     target_q = st.sidebar.text_input("Lead target contains").strip().upper()
 
+    # Round the slider bounds outwards so the default range covers every
+    # actual data point -- otherwise round(1.25366, 2) = 1.25 silently
+    # excludes the top-ranked hypothesis when between() is applied below.
+    import math as _math
     opp_min, opp_max = float(df["opportunity"].min()), float(df["opportunity"].max())
+    opp_lo_default = _math.floor(opp_min * 100) / 100
+    opp_hi_default = _math.ceil(opp_max * 100) / 100
     opp_lo, opp_hi = st.sidebar.slider(
         "Opportunity score",
-        min_value=round(opp_min, 2), max_value=round(opp_max, 2),
-        value=(round(opp_min, 2), round(opp_max, 2)), step=0.05,
+        min_value=opp_lo_default, max_value=opp_hi_default,
+        value=(opp_lo_default, opp_hi_default), step=0.05,
     )
 
     if "mechanistic_support" in df.columns:
@@ -331,6 +348,11 @@ with tab_browse:
         color=scatter_view["is_orphan"].fillna(False).astype(bool).map(
             {True: "orphan", False: "non-orphan"}),
         color_discrete_map={"orphan": "#D55E00", "non-orphan": "#0072B2"},
+        # Carry the original df index on every point so the click event
+        # returns it directly via customdata. Using point_index alone is
+        # broken when plotly splits the data into per-colour traces --
+        # the index is then position-within-trace, not within scatter_view.
+        custom_data=["_df_idx"],
         hover_data={
             "substance_name": True,
             "disease_name": True,
@@ -355,9 +377,23 @@ with tab_browse:
         on_select="rerun", selection_mode="points",
     )
 
+    # Resolve the scatter selection eagerly so we can pin the clicked row
+    # to the top of the ranked table below (Streamlit has no scroll-to-row
+    # API). customdata = [_df_idx] is set on every point in the px.scatter
+    # call above, so it round-trips through the click event regardless of
+    # which colour trace plotly put the point on.
+    scatter_idx = None
+    sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
+    if sc_pts:
+        p0 = sc_pts[0]
+        cd = p0.get("customdata") or p0.get("custom_data")
+        if cd:
+            scatter_idx = int(cd[0])
+
     display_cols = [
         c for c in [
-            "rank", "brief_url", "substance_name", "disease_name", "lead_target",
+            "rank", "brief_url", "structure_url",
+            "substance_name", "disease_name", "lead_target",
             "opportunity", "mechanistic_support", "novelty", "direction_status",
             "tissue_status", "is_orphan", "us_patients",
             "latest_patent_year", "has_generic",
@@ -394,8 +430,24 @@ with tab_browse:
     else:
         st.session_state["picker_index"] = None
 
+    # Pin the scatter-selected row to the top of the displayed table so
+    # the user lands on the corresponding row immediately after clicking
+    # the point. Original rank order is preserved for the rest.
+    if scatter_idx is not None and scatter_idx in view.index:
+        st.caption(
+            f":round_pushpin: Scatter selection pinned to the top of the table "
+            f"(rank {int(view.loc[scatter_idx, 'rank'])}). "
+            "Click the same point again to clear."
+        )
+        view_for_display = pd.concat([
+            view.loc[[scatter_idx]],
+            view.drop(scatter_idx),
+        ])
+    else:
+        view_for_display = view
+
     event = st.dataframe(
-        view[display_cols].head(2000),
+        view_for_display[display_cols].head(2000),
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -448,6 +500,13 @@ with tab_browse:
                      "primary substance misses."),
             "combo_partner_1_synergy": st.column_config.NumberColumn("Synergy", format="%.3f",
                 help="combo_mech_support - primary_mech_support under the noisy-OR."),
+            "structure_url": st.column_config.ImageColumn(
+                "Chemical structure",
+                help="2D chemical structure (SVG) served live by ChEMBL. "
+                     "Biologics / non-small-molecule substances (mAbs, peptides, "
+                     "gene therapies) leave the cell empty.",
+                width="small",
+            ),
             "brief_url": st.column_config.LinkColumn(
                 ":page_facing_up: Brief",
                 help="One-page PDF brief: mechanism rationale, IP runway, "
@@ -540,7 +599,7 @@ with tab_browse:
             ip_bits.append(f"Latest Orange Book patent expiry: **{int(row['latest_patent_year'])}**.")
         if pd.notna(row.get("loe_year")):
             ip_bits.append(f"Loss-of-exclusivity year: **{int(row['loe_year'])}**.")
-        if row.get("has_generic"):
+        if row.get("has_generic") is True:
             ip_bits.append("Generic competitor available (ANDA filed).")
         elif pd.notna(row.get("latest_patent_year")):
             ip_bits.append("No ANDA generic on file.")
@@ -559,7 +618,7 @@ with tab_browse:
         st.markdown("**Clinical opportunity**")
         if pd.notna(row.get("us_patients")):
             pts = int(row["us_patients"])
-            if row.get("is_orphan"):
+            if row.get("is_orphan") is True:
                 st.markdown(
                     f"- US population: approximately **{pts:,}** patients -- below the "
                     f"200,000 FDA Orphan Drug Act threshold. Orphan exclusivity + premium "
@@ -613,22 +672,16 @@ with tab_browse:
             st.dataframe(row.to_frame().T, use_container_width=True, hide_index=True)
 
     # ------------------------------------------------------------------
-    # Resolve the selected row from either the scatter OR the table.
-    # Both widgets share the same head(2000) view. customdata in plotly
-    # carries the dataframe index so we can resolve it directly.
+    # Pick the row to drive the detail panel: explicit dropdown wins,
+    # otherwise the scatter selection (already resolved above), otherwise
+    # the dataframe row click. The table indices live in view_for_display
+    # because the scatter-selected row was pinned to the top.
     # ------------------------------------------------------------------
-    selected_index = st.session_state.get("picker_index")
-    if selected_index is None:
-        sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
-        if sc_pts:
-            p = sc_pts[0]
-            pos = p.get("point_index") if "point_index" in p else p.get("pointIndex")
-            if pos is not None and pos < len(scatter_view):
-                selected_index = int(scatter_view.iloc[pos]["_df_idx"])
+    selected_index = st.session_state.get("picker_index") or scatter_idx
     if selected_index is None:
         sel = (event.selection or {}).get("rows") if hasattr(event, "selection") else []
         if sel:
-            selected_index = view.head(2000).iloc[sel[0]].name
+            selected_index = view_for_display.head(2000).iloc[sel[0]].name
 
     if selected_index is not None:
         st.divider()
@@ -1056,7 +1109,7 @@ with tab_faq:
     st.divider()
     st.markdown("### A few honest caveats")
     st.markdown(
-        "- The screen is a **research artefact**. Scores are computational "
+        "- The screen is a **research project**. Scores are computational "
         "priors, not clinical recommendations.\n"
         "- **Open Targets coverage is the precision ceiling.** The six backtest "
         "misses (minoxidil/alopecia, propranolol/hemangioma, acetazolamide/IIH, "
@@ -1079,7 +1132,7 @@ with tab_faq:
 
 st.divider()
 st.caption(
-    "REPRISE is a research artefact, not a clinical recommendation. "
+    "REPRISE is a research project, not a clinical recommendation. "
     "All scores are computational priors. "
     f"[Source]({PAPER_URL})  |  manuscript: `manuscript/repurposing_screen_manuscript.pdf`"
 )
