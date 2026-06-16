@@ -372,6 +372,17 @@ with tab_browse:
         on_select="rerun", selection_mode="points",
     )
 
+    # Resolve the scatter selection eagerly so we can pin the clicked row
+    # to the top of the ranked table below (Streamlit has no scroll-to-row
+    # API). The same index also drives the detail panel further down.
+    scatter_idx = None
+    sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
+    if sc_pts:
+        p0 = sc_pts[0]
+        pos = p0.get("point_index") if "point_index" in p0 else p0.get("pointIndex")
+        if pos is not None and pos < len(scatter_view):
+            scatter_idx = int(scatter_view.iloc[pos]["_df_idx"])
+
     display_cols = [
         c for c in [
             "rank", "brief_url", "structure_url",
@@ -412,8 +423,24 @@ with tab_browse:
     else:
         st.session_state["picker_index"] = None
 
+    # Pin the scatter-selected row to the top of the displayed table so
+    # the user lands on the corresponding row immediately after clicking
+    # the point. Original rank order is preserved for the rest.
+    if scatter_idx is not None and scatter_idx in view.index:
+        st.caption(
+            f":round_pushpin: Scatter selection pinned to the top of the table "
+            f"(rank {int(view.loc[scatter_idx, 'rank'])}). "
+            "Click the same point again to clear."
+        )
+        view_for_display = pd.concat([
+            view.loc[[scatter_idx]],
+            view.drop(scatter_idx),
+        ])
+    else:
+        view_for_display = view
+
     event = st.dataframe(
-        view[display_cols].head(2000),
+        view_for_display[display_cols].head(2000),
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -638,22 +665,16 @@ with tab_browse:
             st.dataframe(row.to_frame().T, use_container_width=True, hide_index=True)
 
     # ------------------------------------------------------------------
-    # Resolve the selected row from either the scatter OR the table.
-    # Both widgets share the same head(2000) view. customdata in plotly
-    # carries the dataframe index so we can resolve it directly.
+    # Pick the row to drive the detail panel: explicit dropdown wins,
+    # otherwise the scatter selection (already resolved above), otherwise
+    # the dataframe row click. The table indices live in view_for_display
+    # because the scatter-selected row was pinned to the top.
     # ------------------------------------------------------------------
-    selected_index = st.session_state.get("picker_index")
-    if selected_index is None:
-        sc_pts = (scatter_event.selection or {}).get("points") if hasattr(scatter_event, "selection") else []
-        if sc_pts:
-            p = sc_pts[0]
-            pos = p.get("point_index") if "point_index" in p else p.get("pointIndex")
-            if pos is not None and pos < len(scatter_view):
-                selected_index = int(scatter_view.iloc[pos]["_df_idx"])
+    selected_index = st.session_state.get("picker_index") or scatter_idx
     if selected_index is None:
         sel = (event.selection or {}).get("rows") if hasattr(event, "selection") else []
         if sel:
-            selected_index = view.head(2000).iloc[sel[0]].name
+            selected_index = view_for_display.head(2000).iloc[sel[0]].name
 
     if selected_index is not None:
         st.divider()
