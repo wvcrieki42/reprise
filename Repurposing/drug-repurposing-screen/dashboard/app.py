@@ -206,53 +206,58 @@ tab_browse, tab_history, tab_faq = st.tabs([
 # ======================================================================
 with tab_browse:
     # ------------------------------------------------------------------
-    # Quick preview -- always-visible top hit so the user immediately sees
-    # whether structure rendering and brief downloads work in their env,
-    # without any selection / click required.
+    # Quick preview -- always-visible top-5 cards so the user lands on the
+    # ranking immediately, before any filters are touched. Each card shows
+    # structure, key scores, and a one-click brief download.
     # ------------------------------------------------------------------
-    top_row = df.iloc[0] if len(df) else None
-    if top_row is not None:
-        with st.expander(":eyes: Quick preview of the top-ranked hypothesis "
-                          f"({top_row['substance_name']} -> {top_row['disease_name']})",
-                          expanded=True):
-            pc1, pc2 = st.columns([2, 3])
-            cid = str(top_row.get("substance_chembl_id") or "")
-            with pc1:
-                if cid.startswith("CHEMBL"):
-                    svg = fetch_chembl_structure(cid)
-                    if svg:
-                        svg_fit = re.sub(r"\swidth='[^']*'", " width='300'", svg, count=1)
-                        svg_fit = re.sub(r"\sheight='[^']*'", " height='300'", svg_fit, count=1)
-                        st.html(
-                            "<div style='border:1px solid #e0e0e0;border-radius:8px;"
-                            "padding:8px;background:#fff;display:inline-block;"
-                            f"text-align:center'>{svg_fit}"
-                            "<div style='font-size:11px;color:#666;margin-top:4px'>"
-                            f"2D structure of {top_row['substance_name']} (ChEMBL)"
-                            "</div></div>"
-                        )
-                    else:
-                        st.caption("Structure not available (biologic).")
-            with pc2:
-                st.markdown(f"**Rank #{int(top_row['rank'])}** -- "
-                            f"opportunity **{top_row['opportunity']:.3f}**, "
-                            f"mech support **{top_row['mechanistic_support']:.3f}**, "
-                            f"lead target **{top_row['lead_target']}**.")
-                brief_p = brief_path_for(top_row["substance_name"], top_row["disease_name"])
-                if brief_p is not None:
-                    st.download_button(
-                        label=":page_facing_up: Download the one-page PDF brief",
-                        data=brief_p.read_bytes(),
-                        file_name=brief_p.name,
-                        mime="application/pdf",
-                        key="dl_preview",
-                        type="primary",
+    top_n_preview = 5
+    if len(df) >= 1:
+        with st.expander(
+            f":eyes: Quick preview of the top {top_n_preview} ranked hypotheses",
+            expanded=True,
+        ):
+            preview_rows = df.head(top_n_preview)
+            cols = st.columns(top_n_preview)
+            for col, (_, row) in zip(cols, preview_rows.iterrows()):
+                with col:
+                    cid = str(row.get("substance_chembl_id") or "")
+                    st.markdown(
+                        f"**#{int(row['rank'])} {row['substance_name']}**  \n"
+                        f"_-> {row['disease_name']}_"
                     )
+                    if cid.startswith("CHEMBL"):
+                        svg = fetch_chembl_structure(cid)
+                        if svg:
+                            svg_fit = re.sub(r"\swidth='[^']*'", " width='200'", svg, count=1)
+                            svg_fit = re.sub(r"\sheight='[^']*'", " height='200'", svg_fit, count=1)
+                            st.html(
+                                "<div style='border:1px solid #e0e0e0;border-radius:8px;"
+                                "padding:6px;background:#fff;text-align:center'>"
+                                f"{svg_fit}</div>"
+                            )
+                        else:
+                            st.caption(":dna: _biologic -- no 2D structure_")
                     st.caption(
-                        "The same PDF is also available via the **Inspect a top "
-                        "hypothesis** picker below, or by clicking any of the top-30 "
-                        "ranked rows in the table."
+                        f"opp **{row['opportunity']:.3f}** | "
+                        f"mech **{row['mechanistic_support']:.3f}** | "
+                        f"target **{row['lead_target']}**"
                     )
+                    brief_p = brief_path_for(row["substance_name"], row["disease_name"])
+                    if brief_p is not None:
+                        st.download_button(
+                            label=":page_facing_up: brief",
+                            data=brief_p.read_bytes(),
+                            file_name=brief_p.name,
+                            mime="application/pdf",
+                            key=f"dl_preview_{int(row['rank'])}",
+                            use_container_width=True,
+                        )
+            st.caption(
+                "Each card mirrors a row in the table below. The full per-hit "
+                "detail panel (with mechanism / IP / market narrative) is "
+                "reachable by picking from the dropdown below or clicking the "
+                "corresponding table row / scatter point."
+            )
 
     # ------------------------------------------------------------------
     # Sidebar filters (shared, but only meaningful while Browse is active)
@@ -460,7 +465,7 @@ with tab_browse:
             "combo_partner_1_synergy": st.column_config.NumberColumn("Synergy", format="%.3f",
                 help="combo_mech_support - primary_mech_support under the noisy-OR."),
             "structure_url": st.column_config.ImageColumn(
-                ":dna: Structure",
+                "Chemical structure",
                 help="2D chemical structure (SVG) served live by ChEMBL. "
                      "Biologics / non-small-molecule substances (mAbs, peptides, "
                      "gene therapies) leave the cell empty.",
