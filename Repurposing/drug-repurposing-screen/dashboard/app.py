@@ -705,10 +705,25 @@ with tab_history:
         "effect), an off-label experiment generated a positive trial signal "
         "(metformin in PCOS, naltrexone in alcohol dependence), or a pre-clinical "
         "screen revealed an unexpected cross-class activity (imatinib's KIT "
-        "binding, bortezomib's mantle-cell-lymphoma response). The list below "
-        "is a curated set of 54 historic wins drawn from FDA / EMA approvals and "
-        "well-established off-label uses, used both to validate REPRISE and to "
-        "make the historical pattern visible."
+        "binding, bortezomib's mantle-cell-lymphoma response). Across our curated "
+        "set of **54 landmark wins** (FDA / EMA approvals and well-established "
+        "off-label uses), the median lag from original-use approval to "
+        "repurposed-use approval is **8 years** (range 1 to 40+), and just five "
+        "source indications -- hypertension (7 wins), epilepsy (4), type 2 "
+        "diabetes (4), rheumatoid arthritis (4), schizophrenia (3) -- supplied "
+        "**over 40%** of all repurposings in the set. The same 54-case set is "
+        "what REPRISE is validated against (89% recovery, CI 77-96%)."
+    )
+
+    st.info(
+        ":zap: **Why this matters.** Historic repurposing was a clinician-driven "
+        "trickle: a few wins per decade, almost always from a small handful of "
+        "fertile source indications, with multi-year-to-multi-decade lags. "
+        "REPRISE evaluates **3,996 approved drugs x 28,198 diseases = 176,272 "
+        "candidate pairs in ~12 minutes** on a laptop, with measured precision, "
+        "regulatory context, prevalence overlay, and combination companions -- "
+        "compressing what used to be a serendipity loop into a recomputable "
+        "screen."
     )
 
     history = load_repurposing_history()
@@ -848,49 +863,59 @@ with tab_history:
     st.subheader("How REPRISE is different and what it adds")
     cmp1, cmp2 = st.columns(2)
     with cmp1:
-        st.markdown("**Historic repurposing**")
+        st.markdown("**Historic repurposing (1980-2025)**")
         st.markdown(
-            "- **Serendipitous.** A clinician noticed a side effect, an "
-            "off-label trial got lucky, a screen surfaced a cross-class hit.\n"
-            "- **Slow.** Median **decades** between original use and "
-            "FDA / EMA repurposed approval.\n"
-            "- **One drug at a time.** Each story was its own narrative.\n"
-            "- **Hit-driven only.** No systematic measurement of how often "
-            "the mechanistic case actually shows up in the literature; no "
-            "filter against crowded patent space; no orphan-prevalence "
-            "overlay.\n"
-            "- **No combination layer.** The BRAF + MEK doublet took years "
-            "of separate oncology trials to identify."
+            "- :hourglass_flowing_sand: **Slow.** Median **8 years**, often "
+            "decades; propranolol -> haemangioma took **44 years**, "
+            "methotrexate -> RA **35**.\n"
+            "- :game_die: **Serendipitous.** Side-effect observations, "
+            "off-label trials, or accidental cross-class pre-clinical hits.\n"
+            "- :face_with_monocle: **Concentrated.** Hypertension, epilepsy, "
+            "type 2 diabetes, RA, schizophrenia together supplied **>40%** of "
+            "wins -- a few fertile source indications, most of the disease "
+            "ontology untouched.\n"
+            "- :microscope: **One drug at a time.** Each story is its own "
+            "narrative; no systematic measurement of how often the "
+            "mechanistic case is actually visible upstream.\n"
+            "- :scales: **No regulatory or competitive overlay.** Patent "
+            "status, generic availability, orphan-prevalence, and literature "
+            "crowding are all post-hoc."
         )
     with cmp2:
-        st.markdown("**REPRISE adds**")
+        st.markdown("**REPRISE (this work)**")
         st.markdown(
-            "- **Systematic.** 3,996 approved drugs x 28,198 diseases "
-            "= 176,272 ranked hypotheses, recomputed in ~12 minutes on a "
-            "laptop.\n"
-            "- **Measured precision.** Validated against this same 54-case "
-            "set: **89% recovery (95% CI 77-96%)** at mech-support 0.30.\n"
-            "- **Mechanism-aware.** Scoring is a noisy-OR over drug-target x "
-            "target-disease evidence -- not a pattern match.\n"
-            "- **Layered for action.** Directionality (does the drug push the "
-            "target the way OT genetics predicts is therapeutic?), tissue, "
-            "pathway, IP runway, orphan-prevalence, literature & patent prior.\n"
-            "- **Combination companion finder.** Re-derives the BRAF + MEK "
-            "doublet *de novo* in cardiofaciocutaneous syndrome -- the same "
-            "combo already standard-of-care for BRAF V600E melanoma, without "
-            "prior cross-reference.\n"
-            "- **Operational output.** Per-hit one-page PDF brief that "
-            "translates a row of numbers into a narrative suitable for "
-            "clinical-collaborator outreach."
+            "- :rocket: **Fast.** **176,272** drug-disease hypotheses scored "
+            "in **~12 minutes** on a laptop.\n"
+            "- :dart: **Measured precision.** **89% recovery (95% CI 77-96%)** "
+            "against the same 54-case set, with every miss traced to a "
+            "specific Open Targets coverage gap, not a pipeline error.\n"
+            "- :dna: **Mechanism-aware.** Noisy-OR over drug-target x "
+            "target-disease evidence, layered with directionality (does the "
+            "drug push the target the OT-genetics-predicted way?), tissue "
+            "expression, Reactome pathway co-membership, orthologous-gene "
+            "phylogenetics, and a severity damper.\n"
+            "- :chart_with_upwards_trend: **Built for action.** Orange Book "
+            "IP runway, generic availability, orphan-prevalence overlay, and "
+            "an aggregated PubMed / Europe PMC / NCT / Lens.org investigation "
+            "prior that demotes crowded patent space (e.g. satralizumab -> "
+            "RA, 125 patent filings, demoted to rank 1,547).\n"
+            "- :link: **Combination companion finder.** Re-derives the "
+            "BRAF + MEK doublet *de novo* in cardiofaciocutaneous syndrome "
+            "-- the same combo standard-of-care for BRAF V600E melanoma -- "
+            "without any prior oncology-developmental cross-reference.\n"
+            "- :memo: **Operational output.** Per-hit one-page PDF brief "
+            "that translates the row of numbers into a narrative suitable "
+            "for clinical-collaborator outreach."
         )
 
     st.divider()
-    st.markdown(
-        "The point is **not to replace clinician judgement** but to compress "
-        "what used to be a decades-long serendipity loop into a recomputable "
-        "screen with measured precision and explicit regulatory / economic "
-        "context. Use the Browse tab to interrogate the 176,272-row output; "
-        "the FAQ tab for what every number means."
+    st.success(
+        ":speech_balloon: **The point is not to replace clinician judgement** "
+        "but to compress what used to be a multi-year, hub-indication-bound "
+        "serendipity loop into a recomputable screen with measured precision "
+        "and explicit regulatory / economic context. Use the **Browse** tab "
+        "to interrogate the 176,272-row output; the **FAQ** tab for what "
+        "every number means."
     )
 
 
