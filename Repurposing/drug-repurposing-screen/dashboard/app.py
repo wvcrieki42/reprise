@@ -563,7 +563,7 @@ with tab_browse:
             ip_bits.append(f"Latest Orange Book patent expiry: **{int(row['latest_patent_year'])}**.")
         if pd.notna(row.get("loe_year")):
             ip_bits.append(f"Loss-of-exclusivity year: **{int(row['loe_year'])}**.")
-        if row.get("has_generic"):
+        if row.get("has_generic") is True:
             ip_bits.append("Generic competitor available (ANDA filed).")
         elif pd.notna(row.get("latest_patent_year")):
             ip_bits.append("No ANDA generic on file.")
@@ -582,7 +582,7 @@ with tab_browse:
         st.markdown("**Clinical opportunity**")
         if pd.notna(row.get("us_patients")):
             pts = int(row["us_patients"])
-            if row.get("is_orphan"):
+            if row.get("is_orphan") is True:
                 st.markdown(
                     f"- US population: approximately **{pts:,}** patients -- below the "
                     f"200,000 FDA Orphan Drug Act threshold. Orphan exclusivity + premium "
