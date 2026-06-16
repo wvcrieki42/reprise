@@ -146,6 +146,16 @@ def load_data() -> pd.DataFrame:
         p = brief_path_for(s, d)
         brief_urls.append(brief_data_uri(str(p)) if p is not None else "")
     df["brief_url"] = brief_urls
+    # Per-row 2D structure URL pointing at ChEMBL's public image endpoint.
+    # Streamlit's ImageColumn renders SVG directly from cross-origin URLs;
+    # biologic / non-small-molecule entries (mAbs, peptides, gene therapies)
+    # return 404 from ChEMBL and the cell stays empty.
+    if "substance_chembl_id" in df.columns:
+        df["structure_url"] = [
+            f"https://www.ebi.ac.uk/chembl/api/data/image/{cid}.svg"
+            if str(cid).startswith("CHEMBL") else ""
+            for cid in df["substance_chembl_id"].fillna("")
+        ]
     # PubMed search URL per row -- non-empty only when count > 0 so the
     # LinkColumn renders blank for 0/NA rows and a clickable count for hits.
     if {"pubmed_count", "lead_target", "disease_name"} <= set(df.columns):
@@ -357,7 +367,8 @@ with tab_browse:
 
     display_cols = [
         c for c in [
-            "rank", "brief_url", "substance_name", "disease_name", "lead_target",
+            "rank", "brief_url", "structure_url",
+            "substance_name", "disease_name", "lead_target",
             "opportunity", "mechanistic_support", "novelty", "direction_status",
             "tissue_status", "is_orphan", "us_patients",
             "latest_patent_year", "has_generic",
@@ -448,6 +459,13 @@ with tab_browse:
                      "primary substance misses."),
             "combo_partner_1_synergy": st.column_config.NumberColumn("Synergy", format="%.3f",
                 help="combo_mech_support - primary_mech_support under the noisy-OR."),
+            "structure_url": st.column_config.ImageColumn(
+                ":dna: Structure",
+                help="2D chemical structure (SVG) served live by ChEMBL. "
+                     "Biologics / non-small-molecule substances (mAbs, peptides, "
+                     "gene therapies) leave the cell empty.",
+                width="small",
+            ),
             "brief_url": st.column_config.LinkColumn(
                 ":page_facing_up: Brief",
                 help="One-page PDF brief: mechanism rationale, IP runway, "
