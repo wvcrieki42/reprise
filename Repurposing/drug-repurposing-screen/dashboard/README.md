@@ -1,5 +1,7 @@
 # REPRISE dashboard
 
+**Live: https://reprise.streamlit.app**
+
 Public Streamlit companion to the REPRISE drug-repurposing screen. Three tabs:
 
 1. **Browse hypotheses** -- the 176,272-row ranked output, sidebar filters,
